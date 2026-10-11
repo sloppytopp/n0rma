@@ -1,8 +1,9 @@
 """Bluetooth LE detector: Remote ID drones + AirTag/Tile/SmartTag/Chipolo trackers."""
 import asyncio
 import time
+from collections import deque
 
-from . import remoteid
+from . import remoteid, spam
 
 BASE = "-0000-1000-8000-00805f9b34fb"
 TRACKER_UUIDS = {
@@ -23,7 +24,7 @@ def short_uuid(u):
 
 
 def classify_adv(manufacturer_data, service_data, service_uuids, name=""):
-    """-> (kind, label, extra) where kind in 'drone' | 'tracker' | None."""
+    """-> (kind, label, extra) where kind in 'drone' | 'tracker' | 'ambient' | 'spam' | None."""
     sd = {short_uuid(k): v for k, v in (service_data or {}).items()}
     if REMOTE_ID_UUID in sd:
         return "drone", "Remote ID broadcast", remoteid.from_ble_service_data(sd[REMOTE_ID_UUID])
@@ -39,6 +40,9 @@ def classify_adv(manufacturer_data, service_data, service_uuids, name=""):
     n = (name or "").lower()
     if any(w in n for w in ("airtag", "smarttag", "tile", "chipolo", "pebblebee", "tracker")):
         return "tracker", f"tracker by name ({name})", {}
+    fam = spam.family(mfr, sd)
+    if fam:
+        return "spam", fam, {}
     return None, None, {}
 
 
@@ -48,6 +52,7 @@ class BLEDetector:
         self.seen = {}      # addr -> sighting
         self.seen_total = 0
         self.ambient = 0
+        self.spam = spam.SpamDetector()
         self.ignored = set(eng.db.kv_get("ble_ignore", []))
         self.started = time.time()
         self.last_ad = self.started   # last time ANY advertisement was heard
@@ -73,11 +78,15 @@ class BLEDetector:
             self.ambient += 1
             return
         now = time.time()
+        if kind == "spam":     # counted by the flood detector; one pairing ad alone never raises anything
+            self.spam.on_ad(device.address, label, adv.rssi, now)
+            return
         s = self.seen.get(device.address)
         if not s:
             s = self.seen[device.address] = {"kind": kind, "label": label, "first": now, "n": 0,
                                              "rssi_max": -999, "extra": {}}
         s["last"], s["rssi"] = now, adv.rssi
+        s.setdefault("hist", deque(maxlen=120)).append(adv.rssi)
         s["n"] += 1
         s["rssi_max"] = max(s["rssi_max"], adv.rssi)
         if extra:
@@ -153,6 +162,11 @@ class BLEDetector:
                           {"addr": addr, **safe}, 120)
         else:
             self.eng.status("drone", "ok", "No Remote ID drone heard (Bluetooth)", "ble")
+        # Bluetooth pairing pop-up flood (Flipper Zero / phone-app spam)
+        sp = self.spam.evaluate(now)
+        self.eng.status("bluetooth", sp.level, sp.message)
+        if sp.level != "ok":
+            self.eng.emit("bluetooth", sp.level, "ble_spam", sp.family, sp.message, {"distinct": sp.distinct, "strongest": sp.strongest}, 900)
         # trackers
         live = [(a, s) for a, s in trackers if a not in self.ignored]
         if live:
@@ -170,4 +184,4 @@ class BLEDetector:
 
     def _row(self, addr, s, now):
         return {"mine": addr in self.ignored, "addr": addr, "label": s["label"], "rssi": s.get("rssi"), "seen_s": int(s["last"] - s["first"]),
-                "ago_s": int(now - s["last"])}
+                "ago_s": int(now - s["last"]), "hist": list(s.get("hist", []))[-60:]}

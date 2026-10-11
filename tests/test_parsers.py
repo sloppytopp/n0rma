@@ -107,9 +107,9 @@ class BLE(unittest.TestCase):
         k, *_ = det_ble.classify_adv({0x004C: bytes([0x12, 0x02, 0x00, 0x02])}, {}, [])
         self.assertEqual(k, "ambient")
 
-    def test_airpods_not_tracker(self):
+    def test_airpods_are_only_a_popup_candidate_not_a_tracker(self):
         k, *_ = det_ble.classify_adv({0x004C: bytes([0x07, 0x19] + [0] * 20)}, {}, [])
-        self.assertIsNone(k)
+        self.assertEqual(k, "spam")   # counted by the flood detector; one alone raises nothing (see test_spam)
 
     def test_tile_smarttag(self):
         self.assertEqual(det_ble.classify_adv({}, {}, ["0000feed-0000-1000-8000-00805f9b34fb"])[0], "tracker")

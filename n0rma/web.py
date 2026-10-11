@@ -35,7 +35,7 @@ button.s{font-size:12px;padding:3px 8px}label.n{font-size:13px;color:var(--mut);
 3. Use Settings to set your home location (for the drone map and distances) and see your known Wi-Fi networks.<br>
 4. Everything stays on this computer except the optional address lookup in Settings. Use the Night switch at the top to dim the screen.</p>
 <button class=s onclick="document.getElementById('welcome').style.display='none';try{localStorage.setItem('hw_welcomed','1')}catch(e){}">Got it</button></div>
-<div id=banner class=banner><b>Starting...</b></div><div id=tiles></div><div id=trk></div>
+<div id=banner class=banner><b>Starting...</b></div><div id=tiles></div><div id=trk></div><div id=camq></div>
 <p><button onclick="fetch('/api/beep',{method:'POST',headers:{'X-Homewatch':'1'}}).then(load)">I heard the sensor beep - log it now</button></p>
 </div>
 <div data-tab=radar><div class=card><h2>Proximity radar <span class=m>(rough estimate from signal strength - indoors it can be badly wrong; direction is NOT known, blip angles are arbitrary)</span></h2>
@@ -98,7 +98,7 @@ button.s{font-size:12px;padding:3px 8px}label.n{font-size:13px;color:var(--mut);
 <div class=card><h2>License-plate cameras</h2>
 <p style="font-size:12px;color:var(--mut)">DeFlock is a community map of automatic license-plate readers (such as Flock cameras), built on OpenStreetMap. This link opens it in your browser; N0RMA itself sends nothing, and the map site sees your visit like any website.</p>
 <a href="https://maps.deflock.org" target=_blank rel="noopener noreferrer"><button>Open the DeFlock map</button></a></div></div>
-<div data-tab=nearby><div class=card><h2>Wi-Fi networks nearby</h2><table id=wifi></table></div>
+<div data-tab=nearby><div class=card id=findcard style="display:none"></div><div class=card><h2>Wi-Fi networks nearby</h2><table id=wifi></table></div>
 <div class=card><h2>Devices on your network</h2><table id=lan></table></div>
 <div class=card><h2>Bluetooth trackers / drones in range</h2><table id=ble></table></div></div>
 <script>
@@ -131,6 +131,22 @@ function banner(d){const lv=Object.values(d.state).filter(x=>x.title.indexOf('co
  b.innerHTML='<b>'+(w==='alert'?'Needs your attention':w==='watch'?'Keeping an eye on something':'All clear')+'</b><span>Scanning for '+ago(d.now-(d.started||d.now))+wa+ads+'</span>'}
 const E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let LAST=null,MY=new Set();
+let FIND=null,BEST={};
+function findW(k){FIND={t:'w',k:k};showTab('nearby');load()}
+function findB(k){FIND={t:'b',k:k};showTab('nearby');load()}
+async function mineW(k){await fetch('/api/minewifi?on=1&key='+encodeURIComponent(k),{method:'POST',headers:{'X-Homewatch':'1'}});load()}
+function drawFind(d){const c=document.getElementById('findcard');if(!FIND){c.style.display='none';return}
+ let h=[],label='',now=null;
+ if(FIND.t==='w'){const r=(d.live.wifi||[]).find(x=>x.bssid===FIND.k);h=(d.live.wifi_hist||{})[FIND.k]||[];label=r?(r.ssid||'(hidden)')+' '+r.bssid:FIND.k;now=r?r.signal:null}
+ else{const bb=d.live.ble||{trackers:[],drones:[]};const r=[...bb.trackers,...bb.drones].find(x=>String(x.addr)===FIND.k);h=r?(r.hist||[]):[];label=r?r.label+' '+r.addr:FIND.k;now=r?r.rssi:null}
+ c.style.display='block';const best=h.length?Math.max(...h):null,key=FIND.t+FIND.k;if(best!==null)BEST[key]=Math.max(BEST[key]??-999,best);
+ const slope=h.length>=4?(h.slice(-2).reduce((a,b)=>a+b)/2-h.slice(-4,-2).reduce((a,b)=>a+b)/2):0;
+ const trend=h.length<4?'Walk a few steps, then wait for the next reading.':slope>1.5?'&#9650; Getting WARMER - keep going this way.':slope<-1.5?'&#9660; Getting COLDER - turn around.':'&#9679; No real change yet.';
+ const word=now===null?'Not heard right now':now>=-50?'very hot: it is right here':now>=-62?'hot':now>=-75?'warm':'cold';
+ c.innerHTML=`<h2>Finding: ${E(label)}</h2><canvas id=fcv width=640 height=140 style="width:100%;max-width:640px"></canvas><div style="font-size:14px;margin:6px 0"><b>${now===null?'-':Math.round(now)+' dBm'}</b> - ${word}. ${trend}</div><div class=m style="font-size:12px">Best so far: ${BEST[key]!==undefined?Math.round(BEST[key])+' dBm':'-'}. Wi-Fi refreshes about every 20 s and Bluetooth every few seconds. Walk slowly; the spot where it is loudest is the best clue. Don't remove anything you find: photograph it first.</div><button class=s onclick="FIND=null;load()">Close</button>`;
+ const cv=document.getElementById('fcv'),x=cv.getContext('2d'),W=cv.width,H=cv.height,dark=true;x.clearRect(0,0,W,H);x.strokeStyle='#2a2a2a';x.strokeRect(1,1,W-2,H-2);
+ const Y=v=>H-((Math.max(-100,Math.min(-30,v))+100)/70)*H;if(BEST[key]!==undefined){x.setLineDash([8,6]);x.strokeStyle='#b39a55';x.beginPath();x.moveTo(0,Y(BEST[key]));x.lineTo(W,Y(BEST[key]));x.stroke();x.setLineDash([])}
+ if(h.length>1){x.strokeStyle='#5e9a74';x.lineWidth=2;x.beginPath();h.forEach((v,i)=>{const px=i*(W/(h.length-1));i?x.lineTo(px,Y(v)):x.moveTo(px,Y(v))});x.stroke();x.fillStyle='#c06a6a';x.beginPath();x.arc(W,Y(h[h.length-1]),4,0,7);x.fill()}}
 async function mine(a,on){await fetch('/api/mine?addr='+encodeURIComponent(a)+'&on='+on,{method:'POST',headers:{'X-Homewatch':'1'}});load()}
 const C=()=>getComputedStyle(document.documentElement);
 function hash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return h}
@@ -176,16 +192,18 @@ async function load(){try{const d=await (await fetch('/api/status')).json();LAST
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
 banner(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${s.level.toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
 ev.innerHTML=d.events.map(e=>`<tr class="e-${e.level}"><td>${new Date(e.ts*1000).toLocaleTimeString()}</td><td>${e.level}</td><td>${e.domain}</td><td>${E(e.msg)}</td></tr>`).join('')||'<tr><td class=m>nothing yet</td></tr>';
-wifi.innerHTML=(d.live.wifi||[]).map(w=>`<tr><td>${E(w.ssid)}</td><td>${w.bssid}</td><td>${w.signal} dBm</td><td>${E(w.vendor)}</td><td>${w.klass}</td><td>${w.ssid&&w.ssid!=='(hidden)'?(MY.has(w.ssid)?`<b>(yours)</b> <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">not mine</button>`:`<button class=s onclick="post('/api/mynet?on=1&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">this is my network</button>`):''}</td></tr>`).join('');
+wifi.innerHTML=(d.live.wifi||[]).map(w=>`<tr><td>${E(w.ssid)}</td><td>${w.bssid}</td><td>${w.signal} dBm</td><td>${E(w.vendor)}</td><td>${w.klass}</td><td><button class=s data-k="${w.bssid}" onclick="findW(this.dataset.k)">find</button></td><td>${w.ssid&&w.ssid!=='(hidden)'?(MY.has(w.ssid)?`<b>(yours)</b> <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">not mine</button>`:`<button class=s onclick="post('/api/mynet?on=1&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">this is my network</button>`):''}</td></tr>`).join('');
 lan.innerHTML=(d.live.lan||[]).map(w=>`<tr><td>${w.ip}</td><td>${w.label?`<b>${E(w.label)}</b>`:E(w.hostname)||'<span class=m>-</span>'} <button class=s onclick="nameDev('${w.mac}',this.dataset.n)" data-n="${E(w.label||w.hostname).replace(/"/g,'&quot;')}">name</button></td><td>${w.mac}</td><td>${E(w.vendor)}</td><td>${w.klass}${w.gateway?' (router)':''}</td><td>${Object.values(w.ports).join(',')}</td><td>${w.trusted?'<b>(known)</b> ':''}<button class=s onclick="post('/api/trust?on=${w.trusted?0:1}&mac=${w.mac}')">${w.trusted?'not known':'I know this device'}</button></td></tr>`).join('');
 const sm=d.smart||{},GN=d.smart_names||{};
 document.getElementById('smartlist').innerHTML=Object.keys(sm).map(g=>`<p><b>${E((GN[g]||[g])[0])} (${sm[g].length})</b><br><span class=m style="font-size:11px">${E((GN[g]||['',''])[1])}</span></p><table>`+sm[g].slice(0,12).map(r=>`<tr><td>${E(r.title)}</td><td>${E(r.sub)}</td><td>${E(String(r.signal))} dBm</td></tr>`).join('')+'</table>').join('')||'<p class=m style="font-size:13px">No recognisable smart devices heard yet. Wi-Fi refreshes every ~30 s.</p>';
+const cq=d.live.cam;document.getElementById('camq').innerHTML=cq?`<div class=card><h2>Camera-like Wi-Fi source heard</h2><div style="font-size:13px">${E(cq.ssid||'(hidden)')} <span class=m>${E(cq.bssid)} · ${Math.round(cq.signal)} dBm</span> <button class=s data-k="${E(cq.key)}" onclick="mineW(this.dataset.k)">This is mine / known</button> <button class=s data-k="${E(cq.bssid)}" onclick="findW(this.dataset.k)">find it</button></div><p class=m style="font-size:11px">A match is a reason to look, not proof. Mark it only if you know what it is.</p></div>`:'';
+drawFind(d);
 const b0=d.live.ble||{trackers:[],drones:[]};
 const dur=s=>s<90?s+' s':s<5400?Math.round(s/60)+' min':s<172800?Math.round(s/3600)+' h':Math.round(s/86400)+' days';
 const unk=(b0.trackers||[]).filter(x=>!x.mine);
 document.getElementById('trk').innerHTML=unk.length?'<div class=card><h2>Trackers heard nearby - are any of these yours?</h2>'+unk.map(x=>{const a=String(x.addr).replace(/[^0-9A-Fa-f:]/g,'');return `<div style="font-size:13px;margin:6px 0">${E(x.label)} <span class=m>${a} · ${x.rssi} dBm · here for ${dur(x.seen_s)}</span> <button class=s onclick="mine('${a}',1)">This is mine</button></div>`}).join('')+'<p class=m style="font-size:11px">Tap "This is mine" for your own Tile, AirTag or headphones so they stop being flagged. A tracker you do NOT recognise that stays close for hours is worth finding (n0rma find &lt;address&gt;).</p></div>':'';
 const b=d.live.ble||{trackers:[],drones:[]};
-ble.innerHTML=[...b.drones.map(x=>['DRONE',x]),...b.trackers.map(x=>['tracker',x])].map(([k,x])=>`<tr><td>${k}${x.mine?' <b>(yours)</b>':''}</td><td>${E(x.label)}</td><td>${x.addr}</td><td>${x.rssi} dBm</td><td>${x.seen_s}s</td><td>${k==='tracker'?`<button class=s onclick="mine('${x.addr}',${x.mine?0:1})">${x.mine?'not mine':'this is mine'}</button>`:''}</td></tr>`).join('')||'<tr><td class=m>none</td></tr>';
+ble.innerHTML=[...b.drones.map(x=>['DRONE',x]),...b.trackers.map(x=>['tracker',x])].map(([k,x])=>`<tr><td>${k}${x.mine?' <b>(yours)</b>':''}</td><td>${E(x.label)}</td><td>${x.addr}</td><td>${x.rssi} dBm <button class=s data-k="${String(x.addr).replace(/[^0-9A-Fa-f:]/g,'')}" onclick="findB(this.dataset.k)">find</button></td><td>${x.seen_s}s</td><td>${k==='tracker'?`<button class=s onclick="mine('${x.addr}',${x.mine?0:1})">${x.mine?'not mine':'this is mine'}</button>`:''}</td></tr>`).join('')||'<tr><td class=m>none</td></tr>';
 }catch(e){}}
 load();setInterval(load,2500);setInterval(()=>{if(LAST)drawRadar(LAST)},120);</script>"""
 
@@ -292,6 +310,15 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                 cur = set(eng.db.kv_get("ble_ignore", []))
                 (cur.add if q.get("on", ["1"])[0] == "1" else cur.discard)(addr)
                 eng.db.kv_set("ble_ignore", sorted(cur))
+                return self._send(200, '{"ok":true}')
+            if self.path.startswith("/api/minewifi"):
+                q = parse_qs(urlparse(self.path).query)
+                key = q.get("key", [""])[0]
+                if not re.fullmatch(r"wifi:[0-9a-f]{2}(:[0-9a-f]{2}){4}\|[^\x00-\x1f]{0,32}", key):
+                    return self._send(400, '{"error":"bad key"}')
+                cur = set(eng.db.kv_get("wifi_mine", []))
+                (cur.add if q.get("on", ["1"])[0] == "1" else cur.discard)(key)
+                eng.db.kv_set("wifi_mine", sorted(cur))
                 return self._send(200, '{"ok":true}')
             if self.path.startswith("/api/trust"):
                 q = parse_qs(urlparse(self.path).query)

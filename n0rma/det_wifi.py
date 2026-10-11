@@ -2,6 +2,7 @@
 import re
 import subprocess
 import time
+from collections import deque
 
 from . import oui, remoteid
 
@@ -10,6 +11,12 @@ DRONE_SSID = re.compile(r"^(DJI|TELLO|MAVIC|PHANTOM|SPARK|MAVIC|PARROT|ANAFI|BEB
 CAMERA_SSID = re.compile(r"(\bIPC\b|IPCAM|IP-?CAM|HDCAM|HD-?WIFI|MINI.?CAM|SPY|^A9[-_]|^MV[-_]|V380|YOOSEE|"
                          r"ICSEE|EYE4|CLOUDEDGE|^YI-|^WYZE|^ARLO|REOLINK|HIKVISION|DAHUA|^TAPO_?CAM|"
                          r"^CAM[-_]|^CAMERA|^P2P|^GOOLINK|^HDWIFI|^BC[-_]|^IPC-|^SHD[-_]|^NVR)", re.I)
+
+
+def cam_key(b):
+    """What "This is mine / known" saves for a camera-like network: the first five address bytes (one radio often shows several virtual networks)
+    plus the network name, so marking one source cannot silence a differently named one."""
+    return "wifi:" + ":".join(b["bssid"].lower().split(":")[:5]) + "|" + b.get("ssid", "")
 
 
 def parse_iw(text):
@@ -113,6 +120,7 @@ class WifiDetector:
         self.known = set(eng.db.kv_get("wifi_known", []))
         self.first_pass = not self.known
         self.last_drone = 0
+        self.hist = {}   # bssid -> recent signal readings, for the find view
 
     def start(self):
         import threading
@@ -183,6 +191,13 @@ class WifiDetector:
                        (f"No drone signals, but only {len(bss_list)} Wi-Fi network(s) are visible: this adapter may be hiding neighbours, so the Wi-Fi checks are limited"
                         if few else f"No drone signals ({len(bss_list)} Wi-Fi networks in range)"), "wifi")
         # --- camera-looking APs (spy cams often broadcast their own AP)
+        mine = set(eng.db.kv_get("wifi_mine", []))
+        known_cams = [b for b in cam_hits if cam_key(b) in mine]
+        cam_hits = [b for b in cam_hits if cam_key(b) not in mine]
+        eng.live["cam"] = None
+        if cam_hits:
+            top = max(cam_hits, key=lambda x: x["signal"])
+            eng.live["cam"] = {"key": cam_key(top), "ssid": top["ssid"], "bssid": top["bssid"], "signal": top["signal"]}
         if cam_hits:
             b = max(cam_hits, key=lambda x: x["signal"])
             near = b["signal"] > -60
@@ -190,6 +205,8 @@ class WifiDetector:
                    f"{' - VERY CLOSE' if near else ''}")
             eng.status("network", "alert" if near else "watch", msg, "wifi")
             eng.emit("network", "alert" if near else "watch", "wifi_camera", b["bssid"], msg, b, 1800)
+        elif known_cams:
+            eng.status("network", "ok", f"No camera-like Wi-Fi sources besides {len({cam_key(b) for b in known_cams})} you marked as yours", "wifi")
         else:
             eng.status("network", "ok", "No camera-like Wi-Fi sources", "wifi")
         # --- learn / log new APs
@@ -202,6 +219,12 @@ class WifiDetector:
                          f"{b['vendor']} {b['signal']:.0f} dBm", b, 86400)
         self.known |= {b["bssid"] for b in bss_list}
         eng.db.kv_set("wifi_known", sorted(self.known))
+        for b in bss_list:
+            self.hist.setdefault(b["bssid"], deque(maxlen=60)).append(b["signal"])
+        for k in [k for k in self.hist if k not in {b["bssid"] for b in bss_list}]:
+            if len(self.hist) > 300:
+                self.hist.pop(k, None)
+        eng.live["wifi_hist"] = {b["bssid"]: list(self.hist[b["bssid"]]) for b in bss_list}
         eng.live["wifi_at"] = time.time()
         eng.live["wifi"] = sorted(
             [{"ssid": b["ssid"] or "(hidden)", "bssid": b["bssid"], "signal": b["signal"],

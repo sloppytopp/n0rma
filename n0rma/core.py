@@ -23,6 +23,7 @@ DOMAINS = {
     "drone": "Drone near the house?",
     "tracker": "Active tracker present?",
     "network": "Unknown device?",
+    "bluetooth": "Bluetooth pop-up flood?",
     "rf": "Elevated RF / EMF? (RTL-SDR)",
     "host": "This computer's own camera/mic/remote access",
 }
@@ -33,6 +34,7 @@ PUSH_TEXT = {  # phone pushes are deliberately generic: no MACs, no coordinates
     "drone": "A drone signal was detected near the house.",
     "tracker": "A tracker has stayed close to the house.",
     "network": "Something new or camera-like showed up on your network.",
+    "bluetooth": "A flood of fake Bluetooth pairing pop-ups is being broadcast nearby.",
     "rf": "Unusual radio activity was detected.",
     "host": "Your computer's camera, mic or remote access triggered.",
 }
