@@ -129,7 +129,7 @@ function banner(d){const lv=Object.values(d.state).filter(x=>x.title.indexOf('co
  const wa=d.live.wifi_at?' · Wi-Fi: '+(d.live.wifi||[]).length+' networks (scanned '+ago(d.now-d.live.wifi_at)+' ago)':'';
  const ads=d.live.ble?' · Bluetooth: '+d.live.ble.advertisements_seen+' signals heard':'';
  b.innerHTML='<b>'+(w==='alert'?'Needs your attention':w==='watch'?'Keeping an eye on something':'All clear')+'</b><span>Scanning for '+ago(d.now-(d.started||d.now))+wa+ads+'</span>'}
-const E=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let LAST=null,MY=new Set();
 async function mine(a,on){await fetch('/api/mine?addr='+encodeURIComponent(a)+'&on='+on,{method:'POST',headers:{'X-Homewatch':'1'}});load()}
 const C=()=>getComputedStyle(document.documentElement);
