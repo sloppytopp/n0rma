@@ -112,7 +112,7 @@ try{if(localStorage.getItem('hw_welcomed')!=='1')document.getElementById('welcom
 async function nameDev(mac,cur){const v=prompt('Name for this device (blank clears it):',cur||'');if(v===null)return;await post('/api/label?mac='+mac+'&label='+encodeURIComponent(v.trim()))}
 const post=async u=>{await fetch(u,{method:'POST',headers:{'X-Homewatch':'1'}});load()};
 async function loadHome(){const d=LAST||await (await fetch('/api/status')).json();
- document.getElementById('homeNow').innerHTML=d.home?('Set: '+d.home.lat.toFixed(5)+', '+d.home.lon.toFixed(5)+' - <a href="https://www.openstreetmap.org/?mlat='+d.home.lat+'&mlon='+d.home.lon+'#map=17/'+d.home.lat+'/'+d.home.lon+'" target=_blank>view on map</a>'):'Not set.';
+ document.getElementById('homeNow').innerHTML=d.home?('Set: '+d.home.lat.toFixed(5)+', '+d.home.lon.toFixed(5)+' - <a href="https://www.google.com/maps?q='+d.home.lat+','+d.home.lon+'&z=17'+'" target=_blank>view on map</a>'):'Not set.';
  document.getElementById('mySsids').innerHTML=(d.my_ssids||[]).length?(d.my_ssids||[]).map(s=>`<div>${E(s)} <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(s).replace(/"/g,'&quot;')}">not mine</button></div>`).join(''):'<span class=m>none yet</span>'}
 async function geocode(){const q=document.getElementById('addrQ').value.trim();if(!q)return;
  document.getElementById('addrResults').innerHTML='<span class=m>Searching...</span>';
@@ -186,7 +186,7 @@ function drawDrone(d){const fixes=[].concat(...Object.values(d.live.drone_fixes|
  let info=[];fixes.forEach(f=>{const [mx,my]=toM(f.lat,f.lon,H),px=cx+mx*sc,py=cy-my*sc,dist=Math.round(Math.hypot(mx,my));
   const brg=Math.round((Math.atan2(mx,my)*180/Math.PI+360)%360);x.fillStyle='#da3633';x.beginPath();x.moveTo(px,py-12);x.lineTo(px+11,py+9);x.lineTo(px-11,py+9);x.closePath();x.fill();
   if(f.op_lat){const [ox,oy]=toM(f.op_lat,f.op_lon,H);x.fillStyle='#d29922';x.beginPath();x.arc(cx+ox*sc,cy-oy*sc,7,0,7);x.fill();x.strokeStyle='#d29922';x.beginPath();x.moveTo(px,py);x.lineTo(cx+ox*sc,cy-oy*sc);x.stroke()}
-  info.push(`Drone ${E(f.id)}: ${dist} m ${['N','NE','E','SE','S','SW','W','NW'][Math.round(brg/45)%8]} of home, alt ${f.alt??'?'} m`+(f.op_lat?' (amber dot = operator)':'')+` - <a href="https://www.openstreetmap.org/?mlat=${f.lat}&mlon=${f.lon}#map=17/${f.lat}/${f.lon}" target=_blank>open in map</a>`)});
+  info.push(`Drone ${E(f.id)}: ${dist} m ${['N','NE','E','SE','S','SW','W','NW'][Math.round(brg/45)%8]} of home, alt ${f.alt??'?'} m`+(f.op_lat?' (amber dot = operator)':'')+` - <a href="https://www.google.com/maps?q=${f.lat},${f.lon}&z=17" target=_blank>open in map</a>`)});
  dinfo.innerHTML=info.join('<br>')}
 async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawDrone(d);
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
@@ -280,10 +280,10 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                 if not q:
                     return self._send(400, '{"error":"empty"}')
                 try:
-                    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode({"q": q, "format": "json", "limit": 5})
+                    url = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?" + urllib.parse.urlencode({"address": q, "benchmark": "Public_AR_Current", "format": "json"})
                     req = urllib.request.Request(url, headers={"User-Agent": "N0RMA home-counter-surveillance-tool (https://github.com/sloppytopp/n0rma)"})
-                    raw = json.loads(urllib.request.urlopen(req, timeout=8).read())
-                    results = [{"name": r["display_name"], "lat": float(r["lat"]), "lon": float(r["lon"])} for r in raw]
+                    raw = json.loads(urllib.request.urlopen(req, timeout=8).read())["result"]["addressMatches"][:5]
+                    results = [{"name": r["matchedAddress"], "lat": float(r["coordinates"]["y"]), "lon": float(r["coordinates"]["x"])} for r in raw]
                 except Exception:
                     results = []
                 self._send(200, json.dumps({"results": results}))
