@@ -53,9 +53,10 @@ html.norain #rain{display:none}
 <div id=banner class=banner><b>Starting...</b></div><div id=tiles></div><div id=trk></div><div id=camq></div>
 <p><button onclick="fetch('/api/beep',{method:'POST',headers:{'X-Homewatch':'1'}}).then(load)">I heard the sensor beep - log it now</button></p>
 </div>
-<div data-tab=radar><div class=card><h2>Proximity radar <span class=m>(rough estimate from signal strength - indoors it can be badly wrong; direction is NOT known, blip angles are arbitrary)</span></h2>
-<canvas id=radar width=640 height=640 style="width:100%;max-width:560px;display:block;margin:auto"></canvas>
-<p class=m style="font-size:12px;text-align:center">green = your network &nbsp; gray = neighbors &nbsp; amber = tracker/watch &nbsp; red = alert &nbsp; triangle = drone</p></div>
+<div data-tab=radar><div class=card><h2>Proximity radar <span class=m id=rstat>RANGE ONLY</span> <button class=s id=rhelpb onclick="rhelp.style.display=rhelp.style.display?'':'none'">?</button></h2>
+<p id=rhelp class=m style="display:none;font-size:12px">Distance is estimated from signal strength and can be off indoors. This computer has no compass, so contacts are listed in the lane under the scope (nearer to the left, farther to the right): their position shows distance only, never direction. The Android app can measure a real direction: tap a contact and turn in place. The sweep beam is decoration.</p>
+<canvas id=radar width=640 height=770 style="width:100%;max-width:560px;display:block;margin:auto"></canvas>
+<p class=m style="font-size:12px;text-align:center">DIST: ESTIMATED FROM SIGNAL &middot; BEARING: UNKNOWN &nbsp; green = your network &nbsp; gray = neighbors &nbsp; amber = tracker/watch &nbsp; red = alert &nbsp; triangle = drone</p></div>
 <div class=card id=dmapcard style="display:none"><h2>Drone map <span class=m>(real positions from Remote ID)</span></h2>
 <canvas id=dmap width=640 height=480 style="width:100%;max-width:560px;display:block;margin:auto"></canvas><div id=dinfo class=m style="font-size:13px"></div></div>
 </div>
@@ -199,7 +200,7 @@ function drawDefcon(d){const n=defcon(d.state),el=document.getElementById('defco
  t.onchange=()=>{document.documentElement.classList.toggle('norain',!t.checked);x.clearRect(0,0,c.width,c.height);try{localStorage.setItem('hw_rain',t.checked?'1':'0')}catch(e){}}})();
 function radarAlpha(sweep,a,pulse){const dl=((sweep-a)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);const f=.15+.85*Math.exp(-dl/1.7);return pulse?Math.max(.7,f):f}
 function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-30;
- x.clearRect(0,0,W,W);const night=document.documentElement.classList.contains('night');
+ x.clearRect(0,0,W,770);const night=document.documentElement.classList.contains('night');
  const G=night?'#aa4040':'#35e07a',GD=night?'#2a0d0d':'#14502f',TX=night?'#722b2b':'#6fa381';
  const t=Date.now()/1000,sw=RM?-Math.PI/2:((t/4)%1)*2*Math.PI-Math.PI/2;
  // scope face
@@ -215,18 +216,20 @@ function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2
  // sweep trail + beam
  if(!RM){for(let i=0;i<44;i++){x.fillStyle=G;x.globalAlpha=.26*Math.pow(1-i/44,2);x.beginPath();x.moveTo(cx,cx);x.arc(cx,cx,R,sw-(i+1)*.028,sw-i*.028);x.closePath();x.fill()}x.globalAlpha=1}
  x.strokeStyle=G;x.lineWidth=2;x.shadowColor=G;x.shadowBlur=10;x.beginPath();x.moveTo(cx,cx);x.lineTo(cx+R*Math.cos(sw),cx+R*Math.sin(sw));x.stroke();x.shadowBlur=0;
- // blips
- const bl=blips(d);
- bl.forEach(p=>{const a=(hash(p.id)%3600)/3600*2*Math.PI,r=R*rpos(p.m),px=cx+r*Math.cos(a),py=cx+r*Math.sin(a);
-  const al=RM?1:radarAlpha(sw,a,p.pulse);x.fillStyle=p.col;x.strokeStyle=p.col;x.globalAlpha=al;x.shadowColor=p.col;x.shadowBlur=12*al;
-  if(p.pulse){x.globalAlpha=.35*al;x.beginPath();x.arc(px,py,12+10*Math.abs(Math.sin(t*2)),0,7);x.fill();x.globalAlpha=al}
-  x.beginPath();if(p.tri){x.moveTo(px,py-11);x.lineTo(px+10,py+8);x.lineTo(px-10,py+8);x.closePath()}else x.arc(px,py,6,0,7);x.fill();x.shadowBlur=0;
-  x.fillStyle=TX;x.font='14px monospace';x.fillText((p.label||'').slice(0,16).toUpperCase(),px+11,py+5);x.globalAlpha=1});
+ // lane under the scope: no bearing exists on this computer, so contacts are placed by DISTANCE ONLY
+ const bl=blips(d).sort((p,q)=>p.m-q.m),LY=660,LH=100;
+ x.fillStyle='rgba(0,60,28,.12)';x.fillRect(10,LY,W-20,LH);x.strokeStyle=GD;x.lineWidth=1;x.setLineDash([8,6]);x.strokeRect(10,LY,W-20,LH);x.setLineDash([]);
+ x.fillStyle='#ffb000';x.font='15px monospace';x.fillText('DIRECTION UNKNOWN',20,LY+20);x.fillStyle=TX;x.fillText('NEAR',W-120,LY+20);x.fillText('FAR >',W-64,LY+20);
+ bl.forEach((p,i)=>{const px=24+(W-48)*rpos(p.m),row=i%3,py=LY+40+row*22,al=RM?1:(.7+.3*Math.sin(t*2+i));
+  x.fillStyle=p.col;x.globalAlpha=al;x.shadowColor=p.col;x.shadowBlur=10*al;
+  x.beginPath();if(p.tri){x.moveTo(px,py-9);x.lineTo(px+8,py+6);x.lineTo(px-8,py+6);x.closePath()}else x.arc(px,py,5,0,7);x.fill();x.shadowBlur=0;
+  x.fillStyle=TX;x.font='13px monospace';const lab=(p.label||'').slice(0,12).toUpperCase(),lw=x.measureText(lab).width;x.fillText(lab,px+lw+14>W-12?px-lw-9:px+9,py+4);x.globalAlpha=1});
+ if(!bl.length){x.fillStyle=TX;x.fillText('no contacts',20,LY+50)}
  // you
  x.shadowColor='#58a6ff';x.shadowBlur=14;x.fillStyle='#58a6ff';x.fillRect(cx-6,cx-6,12,12);x.shadowBlur=0;x.strokeStyle='#58a6ff';x.lineWidth=1;x.strokeRect(cx-11,cx-11,22,22);
  // readout
  const near=bl.length?Math.min(...bl.map(p=>p.m)):null;x.fillStyle=G;x.font='15px monospace';
- x.fillText('CONTACTS  '+bl.length,10,22);x.fillText('NEAREST   '+(near==null?'--':Math.round(near)+' M (EST)'),10,42);x.fillText('SWEEP     '+(RM?'HELD':'4.0 S'),10,62)}
+ x.fillText('CONTACTS  '+bl.length,10,22);x.fillText('NEAREST   '+(near==null?'--':Math.round(near)+' M (EST)'),10,42);x.fillText('BEARING   N/A (NO COMPASS)',10,62)}
 function toM(lat,lon,H){const k=111320;return [(lon-H.lon)*k*Math.cos(H.lat*Math.PI/180),(lat-H.lat)*k]}
 function drawDrone(d){const fixes=[].concat(...Object.values(d.live.drone_fixes||{})).filter(f=>f.lat),H=d.home;
  const card=document.getElementById('dmapcard');if(!fixes.length||!H){card.style.display='none';return}
