@@ -6,11 +6,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>N0RMA</title><style>
-:root{--bg:#000;--fg:#c8c8c8;--mut:#8a8a8a;--faint:#6a6a6a;--card:#0e0e0e;--ring:#2a2a2a;
---okbg:#0f1d15;--watchbg:#211b0d;--alertbg:#2a1313;--offbg:#141414;--ok:#5e9a74;--watch:#b39a55;--alert:#c06a6a;--off:#7a7a7a;--btn:#1c2a22;--btnfg:#9cc7ab}
-html.night{--fg:#8c3030;--mut:#722b2b;--faint:#5a2222;--card:#0a0303;--ring:#2a0d0d;--okbg:#0c0404;--watchbg:#0c0404;--alertbg:#0c0404;--offbg:#0c0404;
+:root{--bg:#000;--fg:#a8e6b8;--mut:#6fa381;--faint:#4d7a5c;--card:rgba(2,14,7,.8);--ring:#14502f;
+--okbg:rgba(0,45,22,.55);--watchbg:rgba(52,36,0,.6);--alertbg:rgba(60,8,8,.65);--offbg:rgba(10,24,16,.6);--ok:#35e07a;--watch:#ffb000;--alert:#ff3b3b;--off:#5f8a70;--btn:#0a2a18;--btnfg:#5dff9a}
+html.night{--fg:#8c3030;--mut:#722b2b;--faint:#5a2222;--card:rgba(10,3,3,.85);--ring:#2a0d0d;--okbg:#0c0404;--watchbg:#0c0404;--alertbg:#0c0404;--offbg:#0c0404;
 --ok:#6e2a2a;--watch:#8c3434;--alert:#aa4040;--off:#4a1c1c;--btn:#1a0707;--btnfg:#8c3030}
-body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif;max-width:900px;margin:auto}
+html{background:var(--bg)}body{margin:0;padding:16px;background:transparent;color:var(--fg);font:15px ui-monospace,'SF Mono',Menlo,Consolas,monospace;max-width:900px;margin:auto;position:relative;z-index:1}
 .top{display:flex;align-items:center;gap:10px;margin:0 0 10px}.top h1{font-size:20px;margin:0;flex:1}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--off);display:inline-block}.dot.live{background:var(--ok);animation:br 1.4s ease-in-out infinite alternate}
 @keyframes br{from{opacity:.3}to{opacity:1}}@media(prefers-reduced-motion:reduce){.dot.live{animation:none}}
@@ -27,7 +27,22 @@ table{width:100%;border-collapse:collapse;font-size:13px}td{padding:3px 6px;bord
 button{font-size:15px;padding:10px 16px;border-radius:8px;border:0;background:var(--btn);color:var(--btnfg);cursor:pointer}
 button.s{font-size:12px;padding:3px 8px}label.n{font-size:13px;color:var(--mut);cursor:pointer}
 .tabs{display:flex;gap:6px;margin:6px 0}.tabs button{flex:1;font-size:14px;padding:8px 4px;background:var(--card);color:var(--faint)}.tabs button.on{background:var(--btn);color:var(--btnfg)}.e-alert{color:var(--alert)}.e-watch{color:var(--watch)}.m{color:var(--mut)}a{color:var(--btnfg)}
-</style><div class=top><span class=dot id=hb></span><h1>N0RMA <span class=m id=t></span></h1><label class=n><input type=checkbox id=night> Night</label></div>
+
+#rain{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.22;transition:opacity .6s}
+body::after{content:'';position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0,rgba(0,0,0,.22) 1px,transparent 1px,transparent 3px);opacity:.35}
+.card,.banner,.tile{border:1px solid var(--ring);backdrop-filter:blur(2px)}.banner,.tile{border-left-width:5px}
+.card{position:relative;border-radius:2px;box-shadow:inset 0 0 24px rgba(0,255,110,.04)}
+.card::before,.card::after{content:'';position:absolute;width:12px;height:12px;border:2px solid var(--ok);pointer-events:none}
+.card::before{top:-2px;left:-2px;border-right:0;border-bottom:0}.card::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+.banner,.tile{border-radius:2px}button{border-radius:2px;border:1px solid var(--ring);text-transform:uppercase;letter-spacing:.06em;font-family:inherit}
+.card h2,.tabs button{text-transform:uppercase;letter-spacing:.08em}.top h1{letter-spacing:.3em;text-shadow:0 0 10px var(--ok);color:var(--ok)}
+.defcon{display:flex;align-items:center;gap:8px;border:1px solid var(--ring);padding:4px 10px;background:var(--card);font-size:12px;letter-spacing:.12em}
+.defcon .seg{display:flex;gap:3px}.defcon .seg i{font-style:normal;width:22px;height:22px;line-height:22px;text-align:center;font-size:13px;border:1px solid var(--ring);color:var(--faint)}
+.defcon .seg i.on{color:#000;font-weight:bold;box-shadow:0 0 12px currentColor}
+.defcon.d1 .seg i.on{animation:dc 0.7s steps(2) infinite}@keyframes dc{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.defcon.d1 .seg i.on{animation:none}}
+html.norain #rain{display:none}
+</style><canvas id=rain></canvas><div class=top><span class=dot id=hb></span><h1>N0RMA <span class=m id=t></span></h1><div class=defcon id=defcon title="Alert level from N0RMA's own detectors (5 = all clear, 1 = confirmed alert)"><span>DEFCON</span><span class=seg><i>5</i><i>4</i><i>3</i><i>2</i><i>1</i></span></div><label class=n><input type=checkbox id=rainT checked> Rain</label> <label class=n><input type=checkbox id=night> Night</label></div>
 <div class=tabs id=tabs><button data-t=status>Status</button><button data-t=nearby>Nearby</button><button data-t=radar>Radar</button><button data-t=history>History</button><button data-t=settings>Settings</button><button data-t=smart>Smart</button></div>
 <div data-tab=status><div class=card id=welcome style="display:none"><b style="font-size:16px">Welcome - here's how this works</b>
 <p style="font-size:13px;color:var(--mut);line-height:1.5">1. N0RMA is already scanning in the background. The banner below tells you in plain words if everything is normal - a breathing dot and live counts are proof it's working.<br>
@@ -155,24 +170,63 @@ function rpos(m){const R=[5,20,60];const mm=Math.max(.5,m);let f;
  if(mm<=5)f=mm/5*.33;else if(mm<=20)f=.33+(mm-5)/15*.33;else f=Math.min(1,.66+Math.min(mm-20,40)/40*.34);return f}
 function blips(d){const L=d.live,out=[],mine=new Set(d.my_ssids||[]);
  (L.wifi||[]).forEach(w=>{const known=mine.has(w.ssid)||w.klass==='camera';
-  out.push({id:w.bssid,label:w.ssid||'hidden',m:rssiToM(w.signal,-45),col:mine.has(w.ssid)?getComputedStyle(document.documentElement).getPropertyValue('--ok').trim():(w.klass==='camera'||w.klass==='drone')?'#da3633':'#7a7a7a'})});
+  out.push({id:w.bssid,label:w.ssid||'hidden',m:rssiToM(w.signal,-45),col:mine.has(w.ssid)?getComputedStyle(document.documentElement).getPropertyValue('--ok').trim():(w.klass==='camera'||w.klass==='drone')?'#ff3b3b':'#6f9a80'})});
  const b=L.ble||{trackers:[],drones:[]};
- b.trackers.forEach(t=>out.push({id:t.addr,label:t.label,m:rssiToM(t.rssi,-59),col:d.state.tracker.level==='alert'?'#da3633':'#d29922',pulse:1}));
- b.drones.forEach(t=>out.push({id:t.addr,label:'DRONE',m:rssiToM(t.rssi,-59),col:'#da3633',tri:1,pulse:1}));
+ b.trackers.forEach(t=>out.push({id:t.addr,label:t.label,m:rssiToM(t.rssi,-59),col:d.state.tracker.level==='alert'?'#ff3b3b':'#ffb000',pulse:1}));
+ b.drones.forEach(t=>out.push({id:t.addr,label:'DRONE',m:rssiToM(t.rssi,-59),col:'#ff3b3b',tri:1,pulse:1}));
  return out}
-function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-24;
- x.clearRect(0,0,W,W);const dark=matchMedia('(prefers-color-scheme: dark)').matches;
- const line=dark?'#30363d':'#c9d1d9',txt=dark?'#7a7a7a':'#59636e';
- x.strokeStyle=line;x.fillStyle=txt;x.font='20px sans-serif';
- [[.33,'very close'],[.66,'close'],[1,'far']].forEach(([f,l])=>{x.beginPath();x.arc(cx,cx,R*f,0,7);x.stroke();x.fillText(l,cx+6,cx-R*f+20)});
- x.beginPath();x.moveTo(cx-R,cx);x.lineTo(cx+R,cx);x.moveTo(cx,cx-R);x.lineTo(cx,cx+R);x.stroke();
- const t=Date.now()/1000;
- x.fillStyle='#58a6ff';x.fillRect(cx-7,cx-7,14,14);   // this computer
- blips(d).forEach(p=>{const a=(hash(p.id)%3600)/3600*2*Math.PI,r=R*rpos(p.m);
-  const px=cx+r*Math.cos(a),py=cx+r*Math.sin(a);x.fillStyle=p.col;x.strokeStyle=p.col;
-  if(p.pulse){x.globalAlpha=.35;x.beginPath();x.arc(px,py,10+8*Math.abs(Math.sin(t*2)),0,7);x.fill();x.globalAlpha=1}
-  x.beginPath();if(p.tri){x.moveTo(px,py-11);x.lineTo(px+10,py+8);x.lineTo(px-10,py+8);x.closePath()}else x.arc(px,py,7,0,7);x.fill();
-  x.fillStyle=txt;x.font='17px sans-serif';x.fillText((p.label||'').slice(0,16),px+11,py+5)})}
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const DC_COL={5:'#35e07a',4:'#9be035',3:'#ffb000',2:'#ff6a00',1:'#ff3b3b'};
+function defcon(state){const v=Object.entries(state||{}).filter(([k])=>k!=='host').map(([,x])=>x.level);
+ if(!v.length||v.every(l=>l==='off'))return 0;
+ const al=v.filter(l=>l==='alert').length,wa=v.filter(l=>l==='watch').length;
+ if(state.drone&&state.drone.level==='alert'||al>=2)return 1;if(al===1)return 2;if(wa>=2)return 3;if(wa===1)return 4;return 5}
+function drawDefcon(d){const n=defcon(d.state),el=document.getElementById('defcon');el.className='defcon'+(n?' d'+n:'');
+ el.querySelectorAll('.seg i').forEach(i=>{const on=+i.textContent===n;i.className=on?'on':'';i.style.background=on?DC_COL[n]:'';i.style.color=on?'#000':''})}
+(function(){const c=document.getElementById('rain'),x=c.getContext('2d'),G='ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789',FS=16;let cols=0,drops=[];
+ function size(){c.width=innerWidth;c.height=innerHeight;cols=Math.ceil(c.width/FS);drops=Array.from({length:cols},()=>Math.random()*c.height/FS)}
+ size();addEventListener('resize',size);
+ function tick(){if(document.hidden||RM||document.documentElement.classList.contains('norain'))return;
+  const night=document.documentElement.classList.contains('night'),radar=document.querySelector('[data-tab=radar]').style.display==='';
+  c.style.opacity=night?.08:radar?.38:.2;
+  x.fillStyle='rgba(0,0,0,.09)';x.fillRect(0,0,c.width,c.height);x.font=FS+'px monospace';
+  for(let i=0;i<cols;i++){const ch=G[Math.floor(Math.random()*G.length)];
+   x.fillStyle=Math.random()<.04?(night?'#aa4040':'#e0ffe8'):(night?'#6e2a2a':'#35e07a');x.fillText(ch,i*FS,drops[i]*FS);
+   if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=1}}
+ setInterval(tick,60);
+ let RN=true;try{RN=localStorage.getItem('hw_rain')!=='0'}catch(e){}
+ const t=document.getElementById('rainT');t.checked=RN&&!RM;document.documentElement.classList.toggle('norain',!t.checked);
+ t.onchange=()=>{document.documentElement.classList.toggle('norain',!t.checked);x.clearRect(0,0,c.width,c.height);try{localStorage.setItem('hw_rain',t.checked?'1':'0')}catch(e){}}})();
+function radarAlpha(sweep,a,pulse){const dl=((sweep-a)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);const f=.15+.85*Math.exp(-dl/1.7);return pulse?Math.max(.7,f):f}
+function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-30;
+ x.clearRect(0,0,W,W);const night=document.documentElement.classList.contains('night');
+ const G=night?'#aa4040':'#35e07a',GD=night?'#2a0d0d':'#14502f',TX=night?'#722b2b':'#6fa381';
+ const t=Date.now()/1000,sw=RM?-Math.PI/2:((t/4)%1)*2*Math.PI-Math.PI/2;
+ // scope face
+ const g=x.createRadialGradient(cx,cx,0,cx,cx,R);g.addColorStop(0,night?'rgba(30,6,6,.9)':'rgba(0,52,24,.85)');g.addColorStop(1,'rgba(0,8,4,.92)');
+ x.fillStyle=g;x.beginPath();x.arc(cx,cx,R,0,7);x.fill();
+ // rim ticks (decor only - no bearing data)
+ x.strokeStyle=G;x.lineWidth=1;x.globalAlpha=.7;
+ for(let i=0;i<36;i++){const a=i*Math.PI/18,l=i%3===0?14:7;x.beginPath();x.moveTo(cx+(R+4)*Math.cos(a),cx+(R+4)*Math.sin(a));x.lineTo(cx+(R+4+l)*Math.cos(a),cx+(R+4+l)*Math.sin(a));x.stroke()}
+ // rings + crosshair
+ x.globalAlpha=1;x.shadowColor=G;x.shadowBlur=8;x.strokeStyle=GD;x.lineWidth=1.5;x.fillStyle=TX;x.font='15px monospace';
+ [[.33,'VERY CLOSE'],[.66,'CLOSE'],[1,'FAR']].forEach(([f,l])=>{x.beginPath();x.arc(cx,cx,R*f,0,7);x.stroke();x.fillText(l,cx+6,cx-R*f+17)});
+ x.beginPath();x.moveTo(cx-R,cx);x.lineTo(cx+R,cx);x.moveTo(cx,cx-R);x.lineTo(cx,cx+R);x.stroke();x.shadowBlur=0;
+ // sweep trail + beam
+ if(!RM){for(let i=0;i<44;i++){x.fillStyle=G;x.globalAlpha=.26*Math.pow(1-i/44,2);x.beginPath();x.moveTo(cx,cx);x.arc(cx,cx,R,sw-(i+1)*.028,sw-i*.028);x.closePath();x.fill()}x.globalAlpha=1}
+ x.strokeStyle=G;x.lineWidth=2;x.shadowColor=G;x.shadowBlur=10;x.beginPath();x.moveTo(cx,cx);x.lineTo(cx+R*Math.cos(sw),cx+R*Math.sin(sw));x.stroke();x.shadowBlur=0;
+ // blips
+ const bl=blips(d);
+ bl.forEach(p=>{const a=(hash(p.id)%3600)/3600*2*Math.PI,r=R*rpos(p.m),px=cx+r*Math.cos(a),py=cx+r*Math.sin(a);
+  const al=RM?1:radarAlpha(sw,a,p.pulse);x.fillStyle=p.col;x.strokeStyle=p.col;x.globalAlpha=al;x.shadowColor=p.col;x.shadowBlur=12*al;
+  if(p.pulse){x.globalAlpha=.35*al;x.beginPath();x.arc(px,py,12+10*Math.abs(Math.sin(t*2)),0,7);x.fill();x.globalAlpha=al}
+  x.beginPath();if(p.tri){x.moveTo(px,py-11);x.lineTo(px+10,py+8);x.lineTo(px-10,py+8);x.closePath()}else x.arc(px,py,6,0,7);x.fill();x.shadowBlur=0;
+  x.fillStyle=TX;x.font='14px monospace';x.fillText((p.label||'').slice(0,16).toUpperCase(),px+11,py+5);x.globalAlpha=1});
+ // you
+ x.shadowColor='#58a6ff';x.shadowBlur=14;x.fillStyle='#58a6ff';x.fillRect(cx-6,cx-6,12,12);x.shadowBlur=0;x.strokeStyle='#58a6ff';x.lineWidth=1;x.strokeRect(cx-11,cx-11,22,22);
+ // readout
+ const near=bl.length?Math.min(...bl.map(p=>p.m)):null;x.fillStyle=G;x.font='15px monospace';
+ x.fillText('CONTACTS  '+bl.length,10,22);x.fillText('NEAREST   '+(near==null?'--':Math.round(near)+' M (EST)'),10,42);x.fillText('SWEEP     '+(RM?'HELD':'4.0 S'),10,62)}
 function toM(lat,lon,H){const k=111320;return [(lon-H.lon)*k*Math.cos(H.lat*Math.PI/180),(lat-H.lat)*k]}
 function drawDrone(d){const fixes=[].concat(...Object.values(d.live.drone_fixes||{})).filter(f=>f.lat),H=d.home;
  const card=document.getElementById('dmapcard');if(!fixes.length||!H){card.style.display='none';return}
@@ -190,7 +244,7 @@ function drawDrone(d){const fixes=[].concat(...Object.values(d.live.drone_fixes|
  dinfo.innerHTML=info.join('<br>')}
 async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawDrone(d);
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
-banner(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${s.level.toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
+banner(d);drawDefcon(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${s.level.toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
 ev.innerHTML=d.events.map(e=>`<tr class="e-${e.level}"><td>${new Date(e.ts*1000).toLocaleTimeString()}</td><td>${e.level}</td><td>${e.domain}</td><td>${E(e.msg)}</td></tr>`).join('')||'<tr><td class=m>nothing yet</td></tr>';
 wifi.innerHTML=(d.live.wifi||[]).map(w=>`<tr><td>${E(w.ssid)}</td><td>${w.bssid}</td><td>${w.signal} dBm</td><td>${E(w.vendor)}</td><td>${w.klass}</td><td><button class=s data-k="${w.bssid}" onclick="findW(this.dataset.k)">find</button></td><td>${w.ssid&&w.ssid!=='(hidden)'?(MY.has(w.ssid)?`<b>(yours)</b> <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">not mine</button>`:`<button class=s onclick="post('/api/mynet?on=1&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">this is my network</button>`):''}</td></tr>`).join('');
 lan.innerHTML=(d.live.lan||[]).map(w=>`<tr><td>${w.ip}</td><td>${w.label?`<b>${E(w.label)}</b>`:E(w.hostname)||'<span class=m>-</span>'} <button class=s onclick="nameDev('${w.mac}',this.dataset.n)" data-n="${E(w.label||w.hostname).replace(/"/g,'&quot;')}">name</button></td><td>${w.mac}</td><td>${E(w.vendor)}</td><td>${w.klass}${w.gateway?' (router)':''}</td><td>${Object.values(w.ports).join(',')}</td><td>${w.trusted?'<b>(known)</b> ':''}<button class=s onclick="post('/api/trust?on=${w.trusted?0:1}&mac=${w.mac}')">${w.trusted?'not known':'I know this device'}</button></td></tr>`).join('');
@@ -205,7 +259,7 @@ document.getElementById('trk').innerHTML=unk.length?'<div class=card><h2>Tracker
 const b=d.live.ble||{trackers:[],drones:[]};
 ble.innerHTML=[...b.drones.map(x=>['DRONE',x]),...b.trackers.map(x=>['tracker',x])].map(([k,x])=>`<tr><td>${k}${x.mine?' <b>(yours)</b>':''}</td><td>${E(x.label)}</td><td>${x.addr}</td><td>${x.rssi} dBm <button class=s data-k="${String(x.addr).replace(/[^0-9A-Fa-f:]/g,'')}" onclick="findB(this.dataset.k)">find</button></td><td>${x.seen_s}s</td><td>${k==='tracker'?`<button class=s onclick="mine('${x.addr}',${x.mine?0:1})">${x.mine?'not mine':'this is mine'}</button>`:''}</td></tr>`).join('')||'<tr><td class=m>none</td></tr>';
 }catch(e){}}
-load();setInterval(load,2500);setInterval(()=>{if(LAST)drawRadar(LAST)},120);</script>"""
+load();setInterval(load,2500);setInterval(()=>{if(LAST&&!document.hidden)drawRadar(LAST)},RM?500:50);</script>"""
 
 
 from .core import clean  # noqa: E402

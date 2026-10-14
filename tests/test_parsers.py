@@ -528,3 +528,29 @@ console.log(html);
     html = out.stdout
     assert 'onmouseover="alert(1)"' not in html   # the injected attribute must never become live HTML
     assert "&quot;" in html                        # the quote must be escaped, not passed through raw
+
+
+def test_defcon_level_mapping_runs_in_node():
+    import re, subprocess, shutil
+    from n0rma.web import PAGE
+    if not shutil.which("node"):
+        import pytest
+        pytest.skip("node not available")
+    m = re.search(r"function defcon\(state\)\{.*?\n(?:.*\n)??.*?return 5\}", PAGE, re.S)
+    assert m
+    script = m.group(0) + '''
+const S = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, {level: v}]));
+const cases = [
+  [S({drone: "ok", tracker: "ok", host: "alert"}), 5],      // this-computer domain never raises it
+  [S({drone: "ok", tracker: "watch"}), 4],
+  [S({drone: "watch", tracker: "watch"}), 3],
+  [S({drone: "ok", network: "alert"}), 2],
+  [S({drone: "alert", tracker: "ok"}), 1],
+  [S({tracker: "alert", network: "alert"}), 1],
+  [S({drone: "off", tracker: "off"}), 0],
+];
+for (const [st, want] of cases) { const got = defcon(st); if (got !== want) { console.log("FAIL", JSON.stringify(st), got, want); process.exit(1); } }
+console.log("ok");
+'''
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert out.returncode == 0 and "ok" in out.stdout, out.stdout + out.stderr
