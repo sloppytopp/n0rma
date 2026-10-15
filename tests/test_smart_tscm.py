@@ -75,3 +75,10 @@ class SweepReportTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LanNamingTest(unittest.TestCase):
+    def test_shared_name_is_dropped(self):
+        from n0rma.det_lan import drop_ambiguous
+        self.assertEqual(drop_ambiguous({"1": "Android", "2": "Android", "3": "rudy", "4": ""}),
+                         {"1": "", "2": "", "3": "rudy", "4": ""})

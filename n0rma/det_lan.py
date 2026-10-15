@@ -50,6 +50,16 @@ def lookup_hostname(ip):
     return ""
 
 
+def drop_ambiguous(names):
+    """{ip: name} -> same, with any name that resolved for more than one IP blanked. Router DNS and mDNS can answer
+    with a stale lease or another device's name; a name shared by two devices tells us nothing about either."""
+    count = {}
+    for n in names.values():
+        if n:
+            count[n] = count.get(n, 0) + 1
+    return {ip: ("" if n and count[n] > 1 else n) for ip, n in names.items()}
+
+
 def probe_ports(ip, ports=tuple(VIDEO_PORTS)):
     found = {}
     for p in ports:
@@ -114,9 +124,11 @@ class LanDetector:
         known = {d["mac"]: d for d in eng.db.query("SELECT * FROM devices")}
         with cf.ThreadPoolExecutor(32) as ex:
             ports = dict(zip(neigh, ex.map(probe_ports, neigh)))
-        need = [ip for ip, mac in neigh.items() if not (known.get(mac) or {}).get("hostname")]
+        # A stored name only holds for the IP it was resolved at: IPs get reassigned, so re-resolve whenever it moved.
+        need = [ip for ip, mac in neigh.items()
+                if not (known.get(mac) or {}).get("hostname") or known[mac].get("name_ip") != ip]
         with cf.ThreadPoolExecutor(8) as ex:
-            names = dict(zip(need, ex.map(lookup_hostname, need)))
+            names = drop_ambiguous(dict(zip(need, ex.map(lookup_hostname, need))))
         cams, newcomers, inventory = [], [], []
         for ip, mac in neigh.items():
             ven = oui.vendor(mac)
@@ -133,9 +145,9 @@ class LanDetector:
             else:
                 eng.db.exec("UPDATE devices SET last_seen=?, ip=?, klass=?, ports=? WHERE mac=?",
                             (now, ip, klass, ",".join(map(str, pts)), mac))
-                if names.get(ip):
-                    eng.db.exec("UPDATE devices SET hostname=? WHERE mac=?", (names[ip], mac))
-                    known[mac]["hostname"] = names[ip]
+                if ip in names:      # looked up this scan: a blank answer clears a name that belonged to the old IP
+                    eng.db.exec("UPDATE devices SET hostname=?, name_ip=? WHERE mac=?", (names[ip], ip, mac))
+                    known[mac]["hostname"], known[mac]["name_ip"] = names[ip], ip
             inventory.append({"ip": ip, "mac": mac, "vendor": ven, "klass": klass,
                               "ports": pts, "gateway": ip == gw,
                               "trusted": bool(known.get(mac, {}).get("trusted")),
