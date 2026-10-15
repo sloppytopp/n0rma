@@ -198,7 +198,7 @@ def cmd_mic_sweep(a):
         return 1
     if a.action == "baseline":
         print("Recording baseline. Leave the room quiet; switch on your own gear (router, TV, phones) as normal.", flush=True)
-        freqs = micsweep.run_passes(a.passes)
+        freqs = micsweep.run_passes(a.passes, over_db=micsweep.BASE_DB)
         micsweep.save_baseline(freqs)
         print(f"Saved {len(freqs)} steady carrier(s) as normal.")
     elif a.action == "scan":
@@ -206,7 +206,10 @@ def cmd_mic_sweep(a):
         if not base:
             print("No baseline yet. Run:  n0rma mic-sweep baseline")
             return 1
-        found = micsweep.diff(micsweep.run_passes(a.passes), base["carriers"])
+        if base.get("gain") != micsweep.GAIN:
+            print("The baseline was recorded at a different gain. Record it again:  n0rma mic-sweep baseline")
+            return 1
+        found = micsweep.diff(micsweep.run_passes(a.passes, over_db=micsweep.FLAG_DB), base["carriers"])
         eng = Engine(quiet=True)
         if not found:
             print("No new steady narrowband carriers. This does NOT prove the area has no hidden mics (see docs).")
@@ -221,13 +224,24 @@ def cmd_mic_sweep(a):
         if a.freq is None:
             print("Give the frequency in MHz, e.g.  n0rma mic-sweep tone 433.920")
             return 1
-        print("Playing a tone in this room for ~12s; keep the room otherwise quiet and the volume up...", flush=True)
-        corr, db, verdict = micsweep.tone_test(a.freq * 1e6, mode=a.mode)
-        print(f"correlation {corr:.2f}, tone-on vs off {db:.1f} dB: {verdict}")
-        if corr > 0.8 and db > 6:
-            eng = Engine(quiet=True)
-            eng.emit("rf", "alert", "mic_confirmed", f"{a.freq}", f"Mic tone test: {a.freq:.3f} MHz carried the test tone back", {"corr": corr, "db": db}, 0)
+        print("Playing random tone patterns in this room for ~1 minute (target, then control frequencies); keep the room quiet and the volume up...", flush=True)
+        base = (micsweep.load_baseline() or {}).get("carriers", [])
+        t, controls, v = micsweep.tone_test(a.freq * 1e6, base, mode=a.mode)
+        fmt = lambda sc: f"score {sc[0]:.2f}, {sc[1]:.1f} dB on-vs-off, chance {sc[2]:.3f}"
+        print(f"{a.freq:.3f} MHz: {fmt(t)}")
+        for f, sc in controls:
+            print(f"  control {f / 1e6:.3f} MHz: {fmt(sc)}")
+        msg = {"confirmed": "TONE RETURNED on the target and NOT on the controls: this frequency carries audio from this room.",
+               "coupling": "Inconclusive: the controls also showed the tone, so this computer/dongle is leaking. Move the dongle away on a USB extension and retry.",
+               "possible": "Possible, not confirmed (no control measured, or the match is weak). Repeat closer to the source.",
+               "none": "No tone came back: not carrying audio from this room."}[v]
+        print(msg)
+        eng = Engine(quiet=True)
+        if v == "confirmed":
+            eng.emit("rf", "alert", "mic_confirmed", f"{a.freq}", f"Mic tone test: {a.freq:.3f} MHz carried the test tone back with clean controls", {"target": t}, 0)
             eng.status("rf", "alert", f"Audio bug suspected at {a.freq:.3f} MHz", "micsweep")
+        elif v in ("coupling", "possible"):
+            eng.emit("rf", "watch", "mic_inconclusive", f"{a.freq}", f"Mic tone test {a.freq:.3f} MHz: {v}", {"target": t}, 0)
 
 
 def cmd_smart(a):

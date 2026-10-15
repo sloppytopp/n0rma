@@ -44,11 +44,12 @@ class CarrierTest(unittest.TestCase):
 
 class ToneTest(unittest.TestCase):
     rate, win = 8000, 0.5
-    pat = [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0]
+    pat = [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0]
 
     def audio(self, follow):
         n = int(self.rate * self.win)
-        out = []
+        lag = int(self.rate * 0.1)                           # playback starts a little after capture
+        out = [0] * lag
         for i, on in enumerate(self.pat):
             for k in range(n):
                 t = k / self.rate
@@ -56,20 +57,39 @@ class ToneTest(unittest.TestCase):
         return out
 
     def test_tone_returned(self):
-        corr, db = m.tone_correlation(self.audio(True), self.rate, self.pat, self.win)
+        corr, db, p = m.tone_score(self.audio(True), self.rate, self.pat, self.win)
         self.assertGreater(corr, 0.9)
         self.assertGreater(db, 6)
+        self.assertLessEqual(p, 0.01)
 
     def test_no_tone(self):
-        corr, db = m.tone_correlation(self.audio(False), self.rate, self.pat, self.win)
-        self.assertLess(db, 3)
-        self.assertLess(corr, 0.8)
+        corr, db, p = m.tone_score(self.audio(False), self.rate, self.pat, self.win)
+        self.assertFalse(m.hit((corr, db, p)))
+
+    def test_verdicts(self):
+        hit, quiet = (0.95, 12.0, 0.002), (0.1, 0.5, 0.6)
+        self.assertEqual(m.verdict(hit, []), "possible")
+        self.assertEqual(m.verdict(hit, [quiet, quiet]), "confirmed")
+        self.assertEqual(m.verdict(hit, [quiet, (0.9, 10.0, 0.004)]), "coupling")
+        self.assertEqual(m.verdict(quiet, [quiet]), "none")
+
+    def test_random_pattern_has_a_mix(self):
+        for _ in range(50):
+            p = m.random_pattern(16)
+            self.assertTrue(4 <= sum(p) <= 12)
+
+    def test_controls(self):
+        self.assertTrue(abs(m.pick_control(433.92e6, [434.17e6]) - 434.17e6) >= 100e3)
+        self.assertEqual(m.pick_carrier_control(433.92e6, [433.95e6, 435e6, 900e6]), 435e6)
+        self.assertIsNone(m.pick_carrier_control(433.92e6, []))
 
     def test_baseline_roundtrip(self):
         import os, tempfile
         p = os.path.join(tempfile.mkdtemp(), "b.json")
         m.save_baseline({1e8, 2e8}, p)
-        self.assertEqual(m.load_baseline(p)["carriers"], [1e8, 2e8])
+        b = m.load_baseline(p)
+        self.assertEqual(b["carriers"], [1e8, 2e8])
+        self.assertEqual(b["gain"], m.GAIN)
         self.assertIsNone(m.load_baseline(p + "x"))
 
 

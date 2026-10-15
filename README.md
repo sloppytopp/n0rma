@@ -65,12 +65,14 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
 
 ## Hidden-mic sweep (RTL-SDR)
 
-A microphone is silent, so this looks for the transmitter that would carry its audio. Needs `sudo apt install rtl-sdr` and a dongle.
+A microphone is silent, so this looks for the transmitter that would carry its audio. Needs `sudo apt install rtl-sdr` and a dongle (RTL-SDR Blog V3 recommended).
 
 ```
 n0rma mic-sweep baseline          # quiet house, your own gear on: remembers steady carriers as normal
-n0rma mic-sweep scan              # flags steady narrowband carriers NOT in the baseline
-n0rma mic-sweep tone 433.920      # plays a tone in the room; confirms if that frequency carries it back
+n0rma mic-sweep scan              # flags steady narrowband carriers NOT in the baseline (WATCH only)
+n0rma mic-sweep tone 433.920      # plays random tone patterns in the room; ALERT only if they come back
 ```
 
-A clean result does not prove a room is free of bugs: recorders that don't transmit, wired mics, burst/digital transmitters and anything above ~1.7 GHz are invisible to this.
+How it avoids false alarms: fixed manual gain (stored with the baseline), a lower bar for recording baseline carriers than for flagging new ones, a fresh random on/off pattern each test with a shuffle test for chance, and control measurements (an empty nearby frequency and a nearby real carrier). If a control also "hears" the tone the result is *coupling*, never an alert. A confirmed tone means that frequency carries this room's audio (it could be your own baby monitor), not who put it there.
+
+A clean result does not prove a room is free of bugs: recorders that don't transmit, wired mics, GSM/LTE/DECT/digital or burst transmitters and anything above ~1.3 GHz are invisible to this.
