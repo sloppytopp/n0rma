@@ -1,4 +1,4 @@
-"""Local dashboard (http://127.0.0.1:8777). Big green/amber/red tiles + 'log a beep' button."""
+"""Local dashboard (http://127.0.0.1:8777). Calm grey theme by default (Night vision and the original Classic look selectable), a plain-words event timeline with resolve marks, Rebaseline and the evidence export."""
 import json
 import re
 import threading
@@ -6,53 +6,84 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>N0RMA</title><style>
-:root{--bg:#000;--fg:#a8e6b8;--mut:#6fa381;--faint:#4d7a5c;--card:rgba(2,14,7,.8);--ring:#14502f;
---okbg:rgba(0,45,22,.55);--watchbg:rgba(52,36,0,.6);--alertbg:rgba(60,8,8,.65);--offbg:rgba(10,24,16,.6);--ok:#35e07a;--watch:#ffb000;--alert:#ff3b3b;--off:#5f8a70;--btn:#0a2a18;--btnfg:#5dff9a}
-html.night{--fg:#8c3030;--mut:#722b2b;--faint:#5a2222;--card:rgba(10,3,3,.85);--ring:#2a0d0d;--okbg:#0c0404;--watchbg:#0c0404;--alertbg:#0c0404;--offbg:#0c0404;
---ok:#6e2a2a;--watch:#8c3434;--alert:#aa4040;--off:#4a1c1c;--btn:#1a0707;--btnfg:#8c3030}
-html{background:var(--bg)}body{margin:0;padding:16px;background:transparent;color:var(--fg);font:15px ui-monospace,'SF Mono',Menlo,Consolas,monospace;max-width:900px;margin:auto;position:relative;z-index:1}
-.top{display:flex;align-items:center;gap:10px;margin:0 0 10px}.top h1{font-size:20px;margin:0;flex:1}
+:root{--bg:#121212;--fg:#f2f2f2;--mut:#c4c4c4;--faint:#8f8f8f;--card:#1e1e1e;--ring:#3a3a3a;
+--okbg:#1e2b22;--watchbg:#2e2716;--alertbg:#331b1b;--offbg:#262626;--ok:#5cb874;--watch:#ffb347;--alert:#e5534b;--off:#9e9e9e;--btn:#2e2e2e;--btnfg:#fff;--link:#8ab4f8}
+html.night{--bg:#000;--fg:#8c3030;--mut:#722b2b;--faint:#5a2222;--card:#0c0404;--ring:#2a0d0d;--okbg:#0c0404;--watchbg:#0c0404;--alertbg:#0c0404;--offbg:#0c0404;
+--ok:#6e2a2a;--watch:#8c3434;--alert:#aa4040;--off:#4a1c1c;--btn:#1a0707;--btnfg:#8c3030;--link:#8c3030}
+html.classic{--bg:#000;--fg:#a8e6b8;--mut:#6fa381;--faint:#4d7a5c;--card:rgba(2,14,7,.8);--ring:#14502f;--okbg:rgba(0,45,22,.55);--watchbg:rgba(52,36,0,.6);--alertbg:rgba(60,8,8,.65);--offbg:rgba(10,24,16,.6);--ok:#35e07a;--watch:#ffb000;--alert:#ff3b3b;--off:#5f8a70;--btn:#0a2a18;--btnfg:#5dff9a;--link:#5dff9a}
+html{background:var(--bg)}body{margin:0;padding:16px;background:transparent;color:var(--fg);font:15px/1.45 -apple-system,'Segoe UI',system-ui,Roboto,'Helvetica Neue',Arial,sans-serif;max-width:1100px;margin:auto;position:relative;z-index:1}
+html.classic body{font:15px ui-monospace,'SF Mono',Menlo,Consolas,monospace;max-width:900px}
+.top{display:flex;align-items:center;gap:10px;margin:0 0 10px}.top h1{font-size:20px;margin:0;flex:1;font-weight:600}
+select{font-size:13px;padding:5px 8px;border-radius:8px;border:1px solid var(--ring);background:var(--card);color:var(--fg)}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--off);display:inline-block}.dot.live{background:var(--ok);animation:br 1.4s ease-in-out infinite alternate}
 @keyframes br{from{opacity:.3}to{opacity:1}}@media(prefers-reduced-motion:reduce){.dot.live{animation:none}}
-.banner{border-radius:12px;padding:14px 16px;margin:8px 0;border-left:5px solid var(--off);background:var(--offbg)}
-.banner b{font-size:18px;display:block}.banner span{font-size:12px;color:var(--mut)}
-.tile{border-radius:10px;padding:12px 16px;margin:8px 0;border-left:5px solid var(--off);background:var(--offbg)}
+.banner{border-radius:14px;padding:16px 18px;margin:8px 0;border-left:5px solid var(--off);background:var(--offbg)}
+.banner b{font-size:20px;display:block}.banner span{font-size:13px;color:var(--mut)}
+.tile{border-radius:12px;padding:12px 16px;margin:8px 0;border-left:5px solid var(--off);background:var(--offbg)}
 .tile b{font-size:16px;display:block}.tile span{font-size:13px;color:var(--mut);word-break:break-word}
 .ok{background:var(--okbg);border-color:var(--ok)}.ok b,.banner.ok b{color:var(--ok)}
 .watch{background:var(--watchbg);border-color:var(--watch)}.watch b,.banner.watch b{color:var(--watch)}
 .alert{background:var(--alertbg);border-color:var(--alert)}.alert b,.banner.alert b{color:var(--alert)}
 .off b{color:var(--off)}
-.card{background:var(--card);border-radius:10px;padding:12px 16px;margin:14px 0}.card h2{font-size:15px;margin:0 0 8px;color:var(--mut)}
-table{width:100%;border-collapse:collapse;font-size:13px}td{padding:3px 6px;border-bottom:1px solid var(--ring)}
-button{font-size:15px;padding:10px 16px;border-radius:8px;border:0;background:var(--btn);color:var(--btnfg);cursor:pointer}
-button.s{font-size:12px;padding:3px 8px}label.n{font-size:13px;color:var(--mut);cursor:pointer}
-.tabs{display:flex;gap:6px;margin:6px 0}.tabs button{flex:1;font-size:14px;padding:8px 4px;background:var(--card);color:var(--faint)}.tabs button.on{background:var(--btn);color:var(--btnfg)}.e-alert{color:var(--alert)}.e-watch{color:var(--watch)}.m{color:var(--mut)}a{color:var(--btnfg)}
-
-#rain{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.22;transition:opacity .6s}
-body::after{content:'';position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0,rgba(0,0,0,.22) 1px,transparent 1px,transparent 3px);opacity:.35}
-.card,.banner,.tile{border:1px solid var(--ring);backdrop-filter:blur(2px)}.banner,.tile{border-left-width:5px}
-.card{position:relative;border-radius:2px;box-shadow:inset 0 0 24px rgba(0,255,110,.04)}
-.card::before,.card::after{content:'';position:absolute;width:12px;height:12px;border:2px solid var(--ok);pointer-events:none}
-.card::before{top:-2px;left:-2px;border-right:0;border-bottom:0}.card::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
-.banner,.tile{border-radius:2px}button{border-radius:2px;border:1px solid var(--ring);text-transform:uppercase;letter-spacing:.06em;font-family:inherit}
-.card h2,.tabs button{text-transform:uppercase;letter-spacing:.08em}.top h1{letter-spacing:.3em;text-shadow:0 0 10px var(--ok);color:var(--ok)}
+.card{background:var(--card);border-radius:14px;padding:14px 18px;margin:14px 0}.card h2{font-size:15px;margin:0 0 8px;color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-size:13px}td{padding:5px 6px;border-bottom:1px solid var(--ring)}
+button{font-size:15px;padding:10px 16px;border-radius:10px;border:0;background:var(--btn);color:var(--btnfg);cursor:pointer}
+button.s{font-size:12px;padding:4px 10px}label.n{font-size:13px;color:var(--mut);cursor:pointer}
+.tabs{display:flex;gap:6px;margin:6px 0}.tabs button{flex:1;font-size:14px;padding:8px 4px;background:var(--card);color:var(--faint)}.tabs button.on{background:var(--btn);color:var(--btnfg)}.e-alert{color:var(--alert)}.e-watch{color:var(--watch)}.m{color:var(--mut)}a{color:var(--link)}
+/* calm home */
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;align-items:start}@media(max-width:820px){.grid{grid-template-columns:1fr}}
+aside{position:sticky;top:12px}aside .card{margin-top:8px}aside button,aside a button{display:block;width:100%;margin:6px 0;text-align:left}
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}.cards3 .card{margin:0;padding:12px 14px}.cards3 h3{margin:0;font-size:12px;font-weight:500;color:var(--mut)}
+.big{font-size:26px;font-weight:600;margin:2px 0}.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.chips button{padding:6px 14px;border-radius:20px;font-size:14px;background:var(--card);color:var(--fg)}.chips button.on{background:var(--ok);color:#0b1a10}
+.evi{border-radius:12px;padding:12px 16px;margin:8px 0;background:var(--card)}.evi .h{font-size:13px;font-weight:600}.evi.done{opacity:.5}.evi.done .msg{text-decoration:line-through}
+.evi .msg{margin:2px 0;word-break:break-word}.evi button.s{background:transparent;color:var(--link);padding:2px 0}
+html.classic .calm-only,html:not(.classic) .classic-only,html:not(.classic) #rain,html:not(.classic) .defcon{display:none}
+/* classic (the original look) */
+html.classic #rain{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.22;transition:opacity .6s}
+html.classic body::after{content:'';position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0,rgba(0,0,0,.22) 1px,transparent 1px,transparent 3px);opacity:.35}
+html.classic .card,html.classic .banner,html.classic .tile{border:1px solid var(--ring);backdrop-filter:blur(2px)}html.classic .banner,html.classic .tile{border-left-width:5px}
+html.classic .card{position:relative;border-radius:2px;box-shadow:inset 0 0 24px rgba(0,255,110,.04)}
+html.classic .card::before,html.classic .card::after{content:'';position:absolute;width:12px;height:12px;border:2px solid var(--ok);pointer-events:none}
+html.classic .card::before{top:-2px;left:-2px;border-right:0;border-bottom:0}html.classic .card::after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+html.classic .banner,html.classic .tile{border-radius:2px}html.classic button{border-radius:2px;border:1px solid var(--ring);text-transform:uppercase;letter-spacing:.06em;font-family:inherit}
+html.classic .card h2,html.classic .tabs button{text-transform:uppercase;letter-spacing:.08em}html.classic .top h1{letter-spacing:.3em;text-shadow:0 0 10px var(--ok);color:var(--ok)}
 .defcon{display:flex;align-items:center;gap:8px;border:1px solid var(--ring);padding:4px 10px;background:var(--card);font-size:12px;letter-spacing:.12em}
 .defcon .seg{display:flex;gap:3px}.defcon .seg i{font-style:normal;width:22px;height:22px;line-height:22px;text-align:center;font-size:13px;border:1px solid var(--ring);color:var(--faint)}
 .defcon .seg i.on{color:#000;font-weight:bold;box-shadow:0 0 12px currentColor}
 .defcon.d1 .seg i.on{animation:dc 0.7s steps(2) infinite}@keyframes dc{50%{opacity:.35}}
 @media(prefers-reduced-motion:reduce){.defcon.d1 .seg i.on{animation:none}}
 html.norain #rain{display:none}
-</style><canvas id=rain></canvas><div class=top><span class=dot id=hb></span><h1>N0RMA <span class=m id=t></span></h1><div class=defcon id=defcon title="Alert level from N0RMA's own detectors (5 = all clear, 1 = confirmed alert)"><span>DEFCON</span><span class=seg><i>5</i><i>4</i><i>3</i><i>2</i><i>1</i></span></div><label class=n><input type=checkbox id=rainT checked> Rain</label> <label class=n><input type=checkbox id=night> Night</label></div>
+</style><canvas id=rain></canvas><div class=top><span class=dot id=hb></span><h1>N0RMA <span class=m id=tbar></span> <span class=m id=t style="font-size:12px"></span></h1><div class=defcon id=defcon title="Alert level from N0RMA's own detectors (5 = all clear, 1 = confirmed alert)"><span>DEFCON</span><span class=seg><i>5</i><i>4</i><i>3</i><i>2</i><i>1</i></span></div><label class="n classic-only"><input type=checkbox id=rainT checked> Rain</label> <select id=themeSel title="Theme"><option value=calm>Calm</option><option value=night>Night vision</option><option value=classic>Classic</option></select></div>
 <div class=tabs id=tabs><button data-t=status>Status</button><button data-t=nearby>Nearby</button><button data-t=radar>Radar</button><button data-t=history>History</button><button data-t=settings>Settings</button><button data-t=smart>Smart</button></div>
-<div data-tab=status><div class=card id=welcome style="display:none"><b style="font-size:16px">Welcome - here's how this works</b>
+<div data-tab=status><div class=calm-only><div class=grid><main>
+<div id=cbanner class=banner><b>Starting...</b></div>
+<div class=cards3>
+<div class=card><h3>Active scans</h3><div class=big id=c_scan>-</div><div class=m id=c_scan2 style="font-size:12px"></div></div>
+<div class=card><h3>Detectors unresolved</h3><div class=big id=c_open>-</div><div class=m id=c_open2 style="font-size:12px"></div></div>
+<div class=card><h3>Evidence reports</h3><div class=big id=c_evi>-</div><div class=m style="font-size:12px"><a href="/api/evidence" download="n0rma-evidence.txt">Export report</a></div></div>
+</div>
+<div class=card id=rbcard></div>
+<h2 style="font-size:20px;margin:18px 0 4px">Events</h2>
+<div class=chips id=chips></div><div id=tl></div>
+<h2 style="font-size:20px;margin:22px 0 4px">Detectors</h2><div id=ctiles></div>
+<div class=card><h2>Evidence export</h2><p style="font-size:14px;color:var(--mut)">Makes a plain-text report of everything flagged in the last 30 days. Each entry is linked to the one before it by a cryptographic hash, so any later edit, deletion or reordering breaks the chain and can be detected. Save the last line (the chain end) somewhere separate. Nothing is sent anywhere unless you send it.</p>
+<a href="/api/evidence" download="n0rma-evidence.txt"><button>Export evidence report</button></a></div>
+<p class=m style="font-size:12px">Detect-only. A quiet screen is not a guarantee of safety. Nothing leaves this computer except the optional address lookup in Settings.</p>
+</main><aside><div class=card><h2>Quick actions</h2>
+<a href="/api/evidence" download="n0rma-evidence.txt"><button>Export evidence</button></a>
+<button onclick="rbAsk(true);document.getElementById('rbcard').scrollIntoView({behavior:'smooth'})">Rebaseline</button>
+<button onclick="showTab('settings')">Settings</button>
+<button onclick="showTab('history');document.getElementById('safety').open=true">Safety checklist</button>
+</div></aside></div></div>
+<div class=classic-only><div class=card id=welcome style="display:none"><b style="font-size:16px">Welcome - here's how this works</b>
 <p style="font-size:13px;color:var(--mut);line-height:1.5">1. N0RMA is already scanning in the background. The banner below tells you in plain words if everything is normal - a breathing dot and live counts are proof it's working.<br>
 2. Use Nearby to see every Wi-Fi network and Bluetooth device in range.<br>
 3. Use Settings to set your home location (for the drone map and distances) and see your known Wi-Fi networks.<br>
-4. Everything stays on this computer except the optional address lookup in Settings. Use the Night switch at the top to dim the screen.</p>
+4. Everything stays on this computer except the optional address lookup in Settings. Use the theme menu at the top for a calm, night-vision or classic look.</p>
 <button class=s onclick="document.getElementById('welcome').style.display='none';try{localStorage.setItem('hw_welcomed','1')}catch(e){}">Got it</button></div>
 <div id=banner class=banner><b>Starting...</b></div><div id=tiles></div><div id=trk></div><div id=camq></div>
 <p><button onclick="fetch('/api/beep',{method:'POST',headers:{'X-Homewatch':'1'}}).then(load)">I heard the sensor beep - log it now</button></p>
-</div>
+</div></div>
 <div data-tab=radar><div class=card><h2>Proximity radar <span class=m id=rstat>RANGE ONLY</span> <button class=s id=rhelpb onclick="rhelp.style.display=rhelp.style.display?'':'none'">?</button></h2>
 <p id=rhelp class=m style="display:none;font-size:12px">Distance is estimated from signal strength and can be off indoors. This computer has no compass, so contacts are listed in the lane under the scope (nearer to the left, farther to the right): their position shows distance only, never direction. The Android app can measure a real direction: tap a contact and turn in place. The sweep beam is decoration.</p>
 <canvas id=radar width=640 height=770 style="width:100%;max-width:560px;display:block;margin:auto"></canvas>
@@ -64,7 +95,7 @@ html.norain #rain{display:none}
 <div class=card><h2>Evidence for police or an advocate</h2>
 <p style="font-size:12px;color:var(--mut)">Makes a plain-text report of everything flagged (30 days) with a tamper-evident hash chain. You choose where to send it; nothing is sent automatically. The Android app makes the same format, and each can verify the other's reports.</p>
 <a href="/api/evidence" download="n0rma-evidence.txt"><button>Export evidence report</button></a></div>
-<details class=card><summary><b>Digital safety checklist (accounts, location sharing, stalkerware)</b></summary><div style="font-size:14px;line-height:1.5">
+<details class=card id=safety><summary><b>Digital safety checklist (accounts, location sharing, stalkerware)</b></summary><div style="font-size:14px;line-height:1.5">
 <p><b>First, safety:</b> if someone controls or watches your devices, removing their access can alert them. If you may be in danger, talk to an advocate before changing anything (US: National Domestic Violence Hotline 1-800-799-7233, or text START to 88788; tech-safety help at techsafety.org), and use a device they have never touched for sensitive steps.</p>
 <p><b>Google account:</b> on a trusted device open myaccount.google.com &gt; Security &gt; Your devices and Recent security activity, and sign out anything you don't know. In Google Maps &gt; Location sharing, stop sharing with anyone you don't recognize.</p>
 <p><b>Apple account:</b> Settings &gt; [your name] lists every signed-in device. In Find My &gt; People, stop sharing locations you don't want shared.</p>
@@ -118,8 +149,9 @@ html.norain #rain{display:none}
 <div class=card><h2>Devices on your network</h2><table id=lan></table></div>
 <div class=card><h2>Bluetooth trackers / drones in range</h2><table id=ble></table></div></div>
 <script>
-try{if(localStorage.getItem('hw_night')==='1'){document.documentElement.classList.add('night');night.checked=true}}catch(e){}
-night.onchange=()=>{document.documentElement.classList.toggle('night',night.checked);try{localStorage.setItem('hw_night',night.checked?'1':'0')}catch(e){}};
+function setTheme(t){if(!['calm','night','classic'].includes(t))t='calm';const h=document.documentElement;h.classList.toggle('night',t==='night');h.classList.toggle('classic',t==='classic');themeSel.value=t;try{localStorage.setItem('n0rma_theme',t)}catch(e){}try{if(LAST)drawRadar(LAST)}catch(e){}}
+let TH='calm';try{TH=new URLSearchParams(location.search).get('theme')||localStorage.getItem('n0rma_theme')||(localStorage.getItem('hw_night')==='1'?'night':'calm')}catch(e){}
+setTheme(TH);themeSel.onchange=()=>setTheme(themeSel.value);
 function showTab(t){document.querySelectorAll('[data-tab]').forEach(e=>e.style.display=e.dataset.tab===t?'':'none');
  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));try{localStorage.setItem('hw_tab',t)}catch(e){}}
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.t));
@@ -187,7 +219,7 @@ function drawDefcon(d){const n=defcon(d.state),el=document.getElementById('defco
 (function(){const c=document.getElementById('rain'),x=c.getContext('2d'),G='ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789',FS=16;let cols=0,drops=[];
  function size(){c.width=innerWidth;c.height=innerHeight;cols=Math.ceil(c.width/FS);drops=Array.from({length:cols},()=>Math.random()*c.height/FS)}
  size();addEventListener('resize',size);
- function tick(){if(document.hidden||RM||document.documentElement.classList.contains('norain'))return;
+ function tick(){if(document.hidden||RM||!document.documentElement.classList.contains('classic')||document.documentElement.classList.contains('norain'))return;
   const night=document.documentElement.classList.contains('night'),radar=document.querySelector('[data-tab=radar]').style.display==='';
   c.style.opacity=night?.08:radar?.38:.2;
   x.fillStyle='rgba(0,0,0,.09)';x.fillRect(0,0,c.width,c.height);x.font=FS+'px monospace';
@@ -201,10 +233,10 @@ function drawDefcon(d){const n=defcon(d.state),el=document.getElementById('defco
 function radarAlpha(sweep,a,pulse){const dl=((sweep-a)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);const f=.15+.85*Math.exp(-dl/1.7);return pulse?Math.max(.7,f):f}
 function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-30;
  x.clearRect(0,0,W,770);const night=document.documentElement.classList.contains('night');
- const G=night?'#aa4040':'#35e07a',GD=night?'#2a0d0d':'#14502f',TX=night?'#722b2b':'#6fa381';
+ const cs=getComputedStyle(document.documentElement),G=cs.getPropertyValue('--ok').trim(),GD=cs.getPropertyValue('--ring').trim(),TX=cs.getPropertyValue('--mut').trim(),classic=document.documentElement.classList.contains('classic');
  const t=Date.now()/1000,sw=RM?-Math.PI/2:((t/4)%1)*2*Math.PI-Math.PI/2;
  // scope face
- const g=x.createRadialGradient(cx,cx,0,cx,cx,R);g.addColorStop(0,night?'rgba(30,6,6,.9)':'rgba(0,52,24,.85)');g.addColorStop(1,'rgba(0,8,4,.92)');
+ const g=x.createRadialGradient(cx,cx,0,cx,cx,R);g.addColorStop(0,night?'rgba(30,6,6,.9)':classic?'rgba(0,52,24,.85)':'rgba(48,48,48,.9)');g.addColorStop(1,night||classic?'rgba(0,8,4,.92)':'rgba(24,24,24,.95)');
  x.fillStyle=g;x.beginPath();x.arc(cx,cx,R,0,7);x.fill();
  // rim ticks (decor only - no bearing data)
  x.strokeStyle=G;x.lineWidth=1;x.globalAlpha=.7;
@@ -245,10 +277,40 @@ function drawDrone(d){const fixes=[].concat(...Object.values(d.live.drone_fixes|
   if(f.op_lat){const [ox,oy]=toM(f.op_lat,f.op_lon,H);x.fillStyle='#d29922';x.beginPath();x.arc(cx+ox*sc,cy-oy*sc,7,0,7);x.fill();x.strokeStyle='#d29922';x.beginPath();x.moveTo(px,py);x.lineTo(cx+ox*sc,cy-oy*sc);x.stroke()}
   info.push(`Drone ${E(f.id)}: ${dist} m ${['N','NE','E','SE','S','SW','W','NW'][Math.round(brg/45)%8]} of home, alt ${f.alt??'?'} m`+(f.op_lat?' (amber dot = operator)':'')+` - <a href="https://www.google.com/maps?q=${f.lat},${f.lon}&z=17" target=_blank>open in map</a>`)});
  dinfo.innerHTML=info.join('<br>')}
+const LW=l=>l==='alert'?'Alert':l==='watch'?'Suspect':'Info';
+const SW=l=>l==='ok'?'Clear':l==='off'?'Off':LW(l);
+const isFlag=l=>l==='alert'||l==='watch';
+let FILT='all',RB=false;
+function setFilt(f){FILT=f;if(LAST)drawCalm(LAST)}
+async function resolveEv(id,on){await post('/api/resolve?id='+id+'&on='+on)}
+function rbAsk(v){RB=v;if(LAST)drawCalm(LAST)}
+async function rbDo(){RB=false;await post('/api/rebaseline')}
+async function rbReset(){await post('/api/rebaseline?clear=1')}
+function drawCalm(d){
+ const res=new Set(d.resolved||[]),evs=d.events||[];
+ const st=Object.entries(d.state).filter(([k])=>k!=='host'),lv=st.map(([,x])=>x.level),on=lv.filter(l=>l!=='off').length;
+ const open=evs.filter(e=>isFlag(e.level)&&!res.has(e.id)).length;
+ const w=lv.includes('alert')?'alert':lv.includes('watch')?'watch':'ok';
+ const head=!on?'Not scanning':w==='alert'?'Alert: look at this now':w==='watch'?'Something to check':'All clear';
+ const b=document.getElementById('cbanner');b.className='banner '+(on?w:'off');
+ b.innerHTML='<b>'+(on?ICON[w]:ICON.off)+' '+head+'</b><span>'+(open?open+(open===1?' item is':' items are')+' not yet resolved.':'Nothing needs your attention.')+'</span>';
+ document.getElementById('tbar').textContent='· '+(w==='alert'?'Alert':w==='watch'?'Something to check':'All systems nominal');
+ c_scan.textContent=on+' of '+lv.length;c_scan2.textContent='detectors running';
+ c_open.textContent=open;c_open2.textContent=open?'review below':'none';
+ c_evi.textContent=evs.length;
+ const at=d.baseline_at;
+ rbcard.innerHTML='<h2>Rebaseline</h2><p style="font-size:14px;color:var(--mut)">'+(at?'Locked in '+new Date(at*1000).toLocaleString()+'. Any new device on your network is flagged right away. Rebaseline again after you add or move your own devices.':'When everything looks normal and the devices shown are yours, tap Rebaseline. N0RMA locks them in, and anything new after that is flagged right away. Cameras stay watched either way.')+'</p>'
+  +(RB?'<p style="font-size:14px"><b>Lock in what is here now?</b> Only do this if the devices N0RMA shows are yours. Network devices, listening ports and USB devices seen right now become normal. Camera-like devices, trackers and open items are not changed: decide about each one yourself.</p><button onclick="rbDo()">Yes, rebaseline</button> <button class=s onclick="rbAsk(false)">Cancel</button>'
+   :'<button onclick="rbAsk(true)">Rebaseline</button>'+(at?' <button class=s onclick="rbReset()">Reset baseline</button>':''));
+ const F=[['all','All'],['info','Info'],['watch','Suspect'],['alert','Alert']];
+ chips.innerHTML=F.map(([k,l])=>`<button class="${FILT===k?'on':''}" onclick="setFilt('${k}')">${l}</button>`).join('');
+ const shown=evs.filter(e=>FILT==='all'||(FILT==='info'?!isFlag(e.level):e.level===FILT)).slice(0,60);
+ tl.innerHTML=shown.map(e=>{const done=res.has(e.id);return `<div class="evi${done?' done':''}"><div class=h style="color:${e.level==='alert'?'var(--alert)':e.level==='watch'?'var(--watch)':'var(--ok)'}">${LW(e.level)} · ${new Date(e.ts*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})}</div><div class=msg>${E(e.msg)}</div>`+(isFlag(e.level)?`<button class=s onclick="resolveEv(${+e.id},${done?0:1})">${done?'Unresolve':'Mark resolved (my device / false alarm)'}</button>`:'')+'</div>'}).join('')||'<p class=m>Nothing here.</p>';
+ ctiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${SW(s.level)} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('')}
 async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawDrone(d);
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
-banner(d);drawDefcon(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${s.level.toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
-ev.innerHTML=d.events.map(e=>`<tr class="e-${e.level}"><td>${new Date(e.ts*1000).toLocaleTimeString()}</td><td>${e.level}</td><td>${e.domain}</td><td>${E(e.msg)}</td></tr>`).join('')||'<tr><td class=m>nothing yet</td></tr>';
+banner(d);drawDefcon(d);drawCalm(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${SW(s.level).toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
+ev.innerHTML=d.events.map(e=>`<tr class="e-${e.level}"><td>${new Date(e.ts*1000).toLocaleTimeString()}</td><td>${LW(e.level)}</td><td>${e.domain}</td><td>${E(e.msg)}</td></tr>`).join('')||'<tr><td class=m>nothing yet</td></tr>';
 wifi.innerHTML=(d.live.wifi||[]).map(w=>`<tr><td>${E(w.ssid)}</td><td>${w.bssid}</td><td>${w.signal} dBm</td><td>${E(w.vendor)}</td><td>${w.klass}</td><td><button class=s data-k="${w.bssid}" onclick="findW(this.dataset.k)">find</button></td><td>${w.ssid&&w.ssid!=='(hidden)'?(MY.has(w.ssid)?`<b>(yours)</b> <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">not mine</button>`:`<button class=s onclick="post('/api/mynet?on=1&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(w.ssid).replace(/"/g,'&quot;')}">this is my network</button>`):''}</td></tr>`).join('');
 lan.innerHTML=(d.live.lan||[]).map(w=>`<tr><td>${w.ip}</td><td>${w.label?`<b>${E(w.label)}</b>`:E(w.hostname)||'<span class=m>-</span>'} <button class=s onclick="nameDev('${w.mac}',this.dataset.n)" data-n="${E(w.label||w.hostname).replace(/"/g,'&quot;')}">name</button></td><td>${w.mac}</td><td>${E(w.vendor)}</td><td>${w.klass}${w.gateway?' (router)':''}</td><td>${Object.values(w.ports).join(',')}</td><td>${w.trusted?'<b>(known)</b> ':''}<button class=s onclick="post('/api/trust?on=${w.trusted?0:1}&mac=${w.mac}')">${w.trusted?'not known':'I know this device'}</button></td></tr>`).join('');
 const sm=d.smart||{},GN=d.smart_names||{};
@@ -420,6 +482,34 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                     cfg["home"] = {"lat": lat, "lon": lon}
                 save_config(cfg)
                 return self._send(200, '{"ok":true}')
+            if self.path.startswith("/api/resolve"):
+                q = parse_qs(urlparse(self.path).query)
+                try:
+                    eid = int(q.get("id", [""])[0])
+                except ValueError:
+                    return self._send(400, '{"error":"bad id"}')
+                cur = [i for i in eng.db.kv_get("resolved_ids", []) if i != eid]
+                if q.get("on", ["1"])[0] == "1":
+                    cur.append(eid)
+                eng.db.kv_set("resolved_ids", cur[-2000:])   # bounded
+                return self._send(200, '{"ok":true}')
+            if self.path.startswith("/api/rebaseline"):
+                import time as _t
+                from . import det_host
+                if parse_qs(urlparse(self.path).query).get("clear", ["0"])[0] == "1":
+                    eng.db.kv_set("baseline_at", 0)
+                    return self._send(200, '{"ok":true}')
+                ports, usb = det_host.rebaseline(eng.db)
+                # LAN devices seen in the last 10 min become "known". Camera-class devices are deliberately left alone: a camera that is on the
+                # network right now may be the very thing being hunted, so it stays flagged until the person decides about it individually.
+                now = _t.time()
+                rows = eng.db.query("SELECT mac FROM devices WHERE trusted=0 AND last_seen>? AND klass NOT LIKE 'camera%'", (now - 600,))
+                for r in rows:
+                    eng.db.exec("UPDATE devices SET trusted=1 WHERE mac=?", (r["mac"],))
+                left = eng.db.query("SELECT COUNT(*) AS n FROM devices WHERE trusted=0 AND last_seen>? AND klass LIKE 'camera%'", (now - 600,))[0]["n"]
+                eng.db.kv_set("baseline_at", now)
+                eng.emit("host", "info", "baseline", "x", f"Baseline locked in: {len(rows)} devices, {ports} listening ports, {usb} USB devices", cooldown=0)
+                return self._send(200, json.dumps({"ok": True, "devices": len(rows), "ports": ports, "usb": usb, "camera_left": left}))
             if self.path == "/api/beep":
                 eng.beep("dashboard")
                 eng.emit("host", "info", "beep", "x", "Sensor beep logged", cooldown=0)

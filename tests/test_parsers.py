@@ -276,7 +276,7 @@ class MineFeature(unittest.TestCase):
 
     def test_page_has_banner_night_and_no_flashing_alerts(self):
         from n0rma.web import PAGE
-        self.assertIn('id=banner', PAGE); self.assertIn('id=night', PAGE)
+        self.assertIn('id=banner', PAGE); self.assertIn('id=cbanner', PAGE); self.assertIn('id=themeSel', PAGE)
         self.assertNotIn("brightness(1.35)", PAGE)                       # old bright pulsing alert is gone
 
 
@@ -554,3 +554,89 @@ console.log("ok");
 '''
     out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert out.returncode == 0 and "ok" in out.stdout, out.stdout + out.stderr
+
+
+
+def _srv(eng):
+    from n0rma import web
+    import http.client
+    srv = web.serve(eng, "127.0.0.1", 0, None)
+    port = srv.server_address[1]
+
+    def post(path):
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        c.request("POST", path, headers={"X-Homewatch": "1"})
+        r = c.getresponse(); body = r.read(); c.close(); return r.status, body
+    return srv, post
+
+
+def test_resolve_api_marks_and_unmarks_and_validates():
+    eng = Engine(DB(":memory:"), quiet=True)
+    srv, post = _srv(eng)
+    try:
+        assert post("/api/resolve?id=abc&on=1")[0] == 400
+        assert post("/api/resolve?id=7&on=1")[0] == 200
+        assert eng.db.kv_get("resolved_ids") == [7]
+        assert eng.snapshot()["resolved"] == [7]
+        assert post("/api/resolve?id=7&on=0")[0] == 200
+        assert eng.db.kv_get("resolved_ids") == []
+        for i in range(2100):                                       # bounded
+            eng.db.kv_set("resolved_ids", list(range(i, i + 1)))
+        assert post("/api/resolve?id=5000&on=1")[0] == 200
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
+def test_rebaseline_locks_normal_devices_but_never_a_camera():
+    import time, json
+    eng = Engine(DB(":memory:"), quiet=True)
+    now = time.time()
+    for mac, klass in (("aa:aa:aa:00:00:01", "other"), ("aa:aa:aa:00:00:02", "camera"), ("aa:aa:aa:00:00:03", "camera?")):
+        eng.db.exec("INSERT INTO devices(mac,first_seen,last_seen,ip,vendor,klass,ports,trusted) VALUES(?,?,?,?,?,?,?,0)", (mac, now, now, "192.168.0.9", "x", klass, ""))
+    srv, post = _srv(eng)
+    try:
+        code, body = post("/api/rebaseline")
+        assert code == 200
+        r = json.loads(body)
+        assert r["devices"] == 1 and r["camera_left"] == 2
+        trusted = {d["mac"]: d["trusted"] for d in eng.db.query("SELECT mac,trusted FROM devices")}
+        assert trusted == {"aa:aa:aa:00:00:01": 1, "aa:aa:aa:00:00:02": 0, "aa:aa:aa:00:00:03": 0}   # cameras stay flagged
+        assert eng.snapshot()["baseline_at"] > 0
+        assert post("/api/rebaseline?clear=1")[0] == 200
+        assert eng.snapshot()["baseline_at"] == 0
+    finally:
+        srv.shutdown(); srv.server_close()
+
+
+def test_calm_timeline_escapes_hostile_event_text_and_uses_plain_words():
+    import re, subprocess, shutil, json
+    from n0rma.web import PAGE
+    if not shutil.which("node"):
+        import pytest
+        pytest.skip("node not available")
+    a = PAGE.index("const LW=")
+    b = PAGE.index("async function load()")
+    code = PAGE[a:b]
+    e_fn = re.search(r"const E=[^\n]*;", PAGE).group(0)
+    hostile = '<img src=x onerror=alert(1)> " onmouseover="x'
+    script = f"""
+{e_fn}
+const ICON={{ok:'v',watch:'~',alert:'!',off:'-'}};
+const mk=()=>({{}});
+for (const n of ['c_scan','c_scan2','c_open','c_open2','c_evi','rbcard','chips','tl','ctiles','cbanner','tbar']) global[n]=mk();
+global.document={{getElementById:id=>global[id]}};
+let LAST=null; const post=async()=>{{}}; const showTab=()=>{{}};
+{code}
+const d={{now:1,state:{{tracker:{{level:'watch',title:'Tracker',msg:'m'}},host:{{level:'ok',title:'host',msg:'h'}}}},
+ events:[{{id:3,ts:1700000000,domain:'tracker',level:'watch',msg:{json.dumps(hostile)}}},{{id:2,ts:1699999000,domain:'net',level:'ok',msg:'info'}}],resolved:[],baseline_at:0}};
+drawCalm(d);
+console.log(JSON.stringify({{tl:tl.innerHTML,chips:chips.innerHTML,open:c_open.textContent,banner:cbanner.innerHTML}}));
+"""
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert out.returncode == 0, out.stderr
+    r = json.loads(out.stdout)
+    assert "<img" not in r["tl"] and "&lt;img" in r["tl"]            # hostile text is escaped, never live HTML
+    assert 'onmouseover="x' not in r["tl"].replace("&quot;", "")      # the quote cannot break out of an attribute
+    assert "Suspect" in r["tl"] and "WATCH" not in r["tl"]            # plain words
+    assert str(r["open"]) == "1"
+    assert "Mark resolved" in r["tl"]

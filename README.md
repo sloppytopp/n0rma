@@ -63,6 +63,11 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
   `X-Homewatch` header.
 - Your Wi-Fi name, home position, tokens and the ntfy topic live in `~/.local/share/n0rma/config.json` (mode 600), never in the code.
 
+## Dashboard themes
+The browser dashboard opens in a calm grey/white theme: a plain-words status banner, three cards (active scans, unresolved items, evidence), an Info / Suspect / Alert event timeline where each flagged event can be marked resolved (own device, false alarm), quick actions (export evidence, rebaseline, settings, safety checklist) and the tamper-evident evidence export. Pick **Night vision** (dim red on black) or **Classic** (the original DEFCON / Matrix look) from the menu at the top right, or open `/?theme=classic`.
+
+**Rebaseline** (dashboard button, or `n0rma rebaseline` for the host part): once everything looks normal, lock in the network devices, listening ports and USB devices seen right now. Anything new after that is flagged. Camera-like devices are never locked in automatically: a camera on the network right now may be the thing you are looking for, so it stays flagged until you decide about it.
+
 ## Hidden-mic sweep (RTL-SDR)
 
 A microphone is silent, so this looks for the transmitter that would carry its audio. Needs `sudo apt install rtl-sdr` and a dongle (RTL-SDR Blog V3 recommended).

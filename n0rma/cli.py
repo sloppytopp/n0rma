@@ -378,10 +378,8 @@ def cmd_rebaseline(a):
     """Accept everything currently listening / plugged in as normal (after you have checked it)."""
     from . import det_host
     db = DB()
-    p, u = det_host.listening(), det_host.usb_devices()
-    db.kv_set("host_ports", sorted(p))
-    db.kv_set("host_usb", sorted(u))
-    print(f"Accepted {len(p)} listening ports and {len(u)} USB devices as normal.")
+    p, u = det_host.rebaseline(db)
+    print(f"Accepted {p} listening ports and {u} USB devices as normal.")
 
 
 def cmd_forget_network(a):

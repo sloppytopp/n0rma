@@ -168,3 +168,11 @@ class HostDetector:
         else:
             eng.status("host", "ok", "No camera/mic use, no new ports or USB devices, no remote-access tools")
         eng.live["host"] = {"listening": sorted(ports), "usb": sorted(usb), "no_video_devices": not glob.glob("/dev/video*")}
+
+
+def rebaseline(db):
+    """Accept the listening ports and USB devices present right now as normal. -> (ports, usb)."""
+    p, u = listening(), usb_devices()
+    db.kv_set("host_ports", sorted(p))
+    db.kv_set("host_usb", sorted(u))
+    return len(p), len(u)
