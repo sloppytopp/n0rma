@@ -189,6 +189,47 @@ def cmd_sweep_report(a):
         print(text, end="")
 
 
+def cmd_mic_sweep(a):
+    from . import micsweep
+    tools = micsweep.have_tools()
+    need = ["rtl_fm"] if a.action == "tone" else ["rtl_power"]
+    if not all(tools[t] for t in need):
+        print("Needs the RTL-SDR tools and a dongle:  sudo apt install rtl-sdr   (missing: " + ", ".join(t for t in need if not tools[t]) + ")")
+        return 1
+    if a.action == "baseline":
+        print("Recording baseline. Leave the room quiet; switch on your own gear (router, TV, phones) as normal.", flush=True)
+        freqs = micsweep.run_passes(a.passes)
+        micsweep.save_baseline(freqs)
+        print(f"Saved {len(freqs)} steady carrier(s) as normal.")
+    elif a.action == "scan":
+        base = micsweep.load_baseline()
+        if not base:
+            print("No baseline yet. Run:  n0rma mic-sweep baseline")
+            return 1
+        found = micsweep.diff(micsweep.run_passes(a.passes), base["carriers"])
+        eng = Engine(quiet=True)
+        if not found:
+            print("No new steady narrowband carriers. This does NOT prove the area has no hidden mics (see docs).")
+            eng.status("rf", "ok", "Mic sweep: nothing new vs baseline", "micsweep")
+        for f, d in found:
+            msg = f"New steady carrier {f / 1e6:.3f} MHz ({d:.0f} dB) in {micsweep.band_of(f)} - test it: n0rma mic-sweep tone {f / 1e6:.3f}"
+            print("WATCH", msg)
+            eng.emit("rf", "watch", "mic_rf", f"{f:.0f}", msg, {"hz": f, "db": d}, 3600)
+        if found:
+            eng.status("rf", "watch", f"Mic sweep: {len(found)} new carrier(s) vs baseline", "micsweep")
+    else:
+        if a.freq is None:
+            print("Give the frequency in MHz, e.g.  n0rma mic-sweep tone 433.920")
+            return 1
+        print("Playing a tone in this room for ~12s; keep the room otherwise quiet and the volume up...", flush=True)
+        corr, db, verdict = micsweep.tone_test(a.freq * 1e6, mode=a.mode)
+        print(f"correlation {corr:.2f}, tone-on vs off {db:.1f} dB: {verdict}")
+        if corr > 0.8 and db > 6:
+            eng = Engine(quiet=True)
+            eng.emit("rf", "alert", "mic_confirmed", f"{a.freq}", f"Mic tone test: {a.freq:.3f} MHz carried the test tone back", {"corr": corr, "db": db}, 0)
+            eng.status("rf", "alert", f"Audio bug suspected at {a.freq:.3f} MHz", "micsweep")
+
+
 def cmd_smart(a):
     print("Smart devices and privacy - what to review on gadgets that listen, watch or share your connection\n")
     for t, steps in SMART_CHECKLIST:
@@ -414,6 +455,12 @@ def main():
     sw.add_argument("--days", type=float, default=30)
     sw.add_argument("-o", "--out")
     sw.set_defaults(f=cmd_sweep_report)
+    ms = sp.add_parser("mic-sweep", help="hunt for hidden-mic transmitters with an RTL-SDR (baseline, scan, tone)")
+    ms.add_argument("action", choices=["baseline", "scan", "tone"])
+    ms.add_argument("freq", nargs="?", type=float, help="MHz, for 'tone'")
+    ms.add_argument("--passes", type=int, default=5)
+    ms.add_argument("--mode", default="fm", choices=["fm", "wbfm", "am"])
+    ms.set_defaults(f=cmd_mic_sweep)
     sp.add_parser("smart", help="smart-device privacy checklist and the DeFlock license-plate-camera map").set_defaults(f=cmd_smart)
     sp.add_parser("devices", help="LAN inventory").set_defaults(f=cmd_devices)
     t = sp.add_parser("trust", help="mark LAN device(s) as yours")

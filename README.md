@@ -62,3 +62,15 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
   Localhost mode only accepts `Host: 127.0.0.1/localhost` (blocks DNS rebinding) and state-changing requests need an
   `X-Homewatch` header.
 - Your Wi-Fi name, home position, tokens and the ntfy topic live in `~/.local/share/n0rma/config.json` (mode 600), never in the code.
+
+## Hidden-mic sweep (RTL-SDR)
+
+A microphone is silent, so this looks for the transmitter that would carry its audio. Needs `sudo apt install rtl-sdr` and a dongle.
+
+```
+n0rma mic-sweep baseline          # quiet house, your own gear on: remembers steady carriers as normal
+n0rma mic-sweep scan              # flags steady narrowband carriers NOT in the baseline
+n0rma mic-sweep tone 433.920      # plays a tone in the room; confirms if that frequency carries it back
+```
+
+A clean result does not prove a room is free of bugs: recorders that don't transmit, wired mics, burst/digital transmitters and anything above ~1.7 GHz are invisible to this.
