@@ -640,3 +640,33 @@ console.log(JSON.stringify({{tl:tl.innerHTML,chips:chips.innerHTML,open:c_open.t
     assert "Suspect" in r["tl"] and "WATCH" not in r["tl"]            # plain words
     assert str(r["open"]) == "1"
     assert "Mark resolved" in r["tl"]
+
+
+def test_executive_layout_escapes_hostile_text_and_shows_at_most_three_open_items():
+    import re, subprocess, shutil, json
+    from n0rma.web import PAGE
+    if not shutil.which("node"):
+        import pytest
+        pytest.skip("node not available")
+    code = PAGE[PAGE.index("const LW="):PAGE.index("async function load()")]
+    e_fn = re.search(r"const E=[^\n]*;", PAGE).group(0)
+    hostile = '<script>alert(1)</script> " onclick="x'
+    evs = [{"id": i, "ts": 1700000000 + i, "domain": "t", "level": "watch", "msg": hostile if i == 5 else f"m{i}"} for i in range(6, -1, -1)]
+    script = f"""
+{e_fn}
+const ICON={{ok:'v',watch:'~',alert:'!',off:'-'}};
+for (const n of ['c_scan','c_scan2','c_open','c_open2','c_evi','rbcard','chips','tl','ctiles','cbanner','tbar','xhead','xsub','xlist','xrb']) global[n]={{style:{{}}}};
+global.document={{getElementById:id=>global[id]}};
+let LAST=null; const post=async()=>{{}}; const showTab=()=>{{}};
+{code}
+const d={{now:1,state:{{tracker:{{level:'watch',title:'T',msg:'m'}}}},events:{json.dumps(evs)},resolved:[6],baseline_at:0}};
+drawCalm(d); drawExec(d);
+console.log(JSON.stringify({{head:xhead.textContent,sub:xsub.textContent,list:xlist.innerHTML}}));
+"""
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert out.returncode == 0, out.stderr
+    r = json.loads(out.stdout)
+    assert r["head"] == "Review needed"
+    assert r["sub"] == "6 open items."                              # event 6 is resolved
+    assert r["list"].count("Mark resolved") == 3                     # at most three shown
+    assert "<script>" not in r["list"]
