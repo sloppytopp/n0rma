@@ -205,4 +205,4 @@ class Engine:
         recent = self.db.query("SELECT id,ts,domain,level,msg FROM events ORDER BY id DESC LIMIT 150")
         return {"now": time.time(), "state": st, "events": recent, "live": self.live,
                 "resolved": self.db.kv_get("resolved_ids", []), "baseline_at": self.db.kv_get("baseline_at", 0),
-                "home": load_config().get("home"), "my_ssids": load_config().get("my_ssids", []), "started": self.started}
+                "home": load_config().get("home"), "my_ssids": load_config().get("my_ssids", []), "wifi_mine": self.db.kv_get("wifi_mine", []), "started": self.started}

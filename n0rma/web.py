@@ -99,6 +99,11 @@ html.norain #rain{display:none}
 <p id=rhelp class=m style="display:none;font-size:12px">Distance is estimated from signal strength and can be off indoors. This computer has no compass, so contacts are listed in the lane under the scope (nearer to the left, farther to the right): their position shows distance only, never direction. The Android app can measure a real direction: tap a contact and turn in place. The sweep beam is decoration.</p>
 <canvas id=radar width=640 height=770 style="width:100%;max-width:560px;display:block;margin:auto"></canvas>
 <p class=m style="font-size:12px;text-align:center">DIST: ESTIMATED FROM SIGNAL &middot; BEARING: UNKNOWN &nbsp; green = your network &nbsp; gray = neighbors &nbsp; amber = tracker/watch &nbsp; red = alert &nbsp; triangle = drone</p></div>
+<div class=card><h2>Bluetooth and Wi-Fi <span class=m>(distance only)</span></h2>
+<div style="display:flex;gap:8px;justify-content:center"><div style="flex:1;max-width:280px;text-align:center"><div class=m style="font-size:13px">Bluetooth</div><canvas id=scbt width=300 height=300 style="width:100%"></canvas></div>
+<div style="flex:1;max-width:280px;text-align:center"><div class=m style="font-size:13px">Wi-Fi</div><canvas id=scwf width=300 height=300 style="width:100%"></canvas></div></div>
+<p class=m style="font-size:12px">Closer to the middle = closer to you. Distance is estimated from signal strength and can be off indoors. The angle of a dot means nothing: a computer can't tell direction. Use <b>Find it</b> on a result and walk toward the stronger signal.</p></div>
+<div class=card><h2 id=rchead>Results</h2><div id=rcards></div></div>
 <div class=card id=dmapcard style="display:none"><h2>Drone map <span class=m>(real positions from Remote ID)</span></h2>
 <canvas id=dmap width=640 height=480 style="width:100%;max-width:560px;display:block;margin:auto"></canvas><div id=dinfo class=m style="font-size:13px"></div></div>
 </div>
@@ -332,7 +337,39 @@ function drawExec(d){
  xrb.innerHTML=rbcard.innerHTML}
 async function loadPres(){try{const d=await (await fetch('/api/presence')).json();const f=s=>s>=3600?(s/3600).toFixed(1)+' h':Math.round(s/60)+' min';
  presbox.innerHTML=`<div class=m>Scanning covered ${f(d.scanned)} of the last 24 h.</div>`+(d.sources.length?'<table>'+d.sources.map(x=>`<tr><td>${E(x.label)}${x.hidden?' <span class=m>(hidden)</span>':''}</td><td class=m>${x.key.replace('wifi:','')}</td><td>${f(x.total)}</td><td>${x.appearances}x</td><td class=m>${new Date(x.last*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td></tr>`).join('')+'</table>':'<div class=m>Nothing logged yet.</div>')}catch(e){}}
-async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawDrone(d);
+function rband(m){return m<3?'right here':m<8?'in this room':m<25?'in the house':'outside or far'}
+function rcItems(d){const L=d.live,mine=new Set(d.my_ssids||[]),wm=new Set(d.wifi_mine||[]),out=[];
+ (L.wifi||[]).forEach(w=>{const m=rssiToM(w.signal,-45),hid=!w.ssid||w.ssid==='(hidden)',cam=w.klass==='camera'||w.klass==='drone',key='wifi:'+w.bssid.split(':').slice(0,5).join(':')+'|'+(hid?'':w.ssid);
+  const isMine=(!hid&&mine.has(w.ssid))||wm.has(key);let s,col,fl=false;
+  if(isMine){s='Yours.';col='good'}
+  else if(cam&&m>=25){s="Looks like a camera's Wi-Fi, but it's far away - most likely a neighbor's. Only a concern if it gets stronger.";col='watch'}
+  else if(cam){s='Looks like a camera or drone link, '+rband(m)+'. Worth a look.';col='alert';fl=true}
+  else if(hid&&m<8){s='A hidden network '+rband(m)+". It doesn't broadcast a name, so check whether one of your devices makes it.";col='watch';fl=true}
+  else if(hid){s='A hidden network, '+rband(m)+'.';col='neutral'}
+  else{s='A Wi-Fi network, '+rband(m)+'.';col='neutral'}
+  out.push({id:'w'+w.bssid,bt:0,title:w.ssid||'(hidden)',s,col,fl,m,mine:isMine,wk:key,ssid:hid?'':w.ssid,addr:w.bssid,
+   det:'MAC (BSSID): '+w.bssid+'\\nMaker: '+w.vendor+'\\nSignal: '+w.signal+' dBm (about '+Math.round(m)+' m)'})});
+ ((L.ble||{trackers:[]}).trackers||[]).forEach(t=>{const m=rssiToM(t.rssi,-59),name=String(t.label).split(' SEPARATED')[0];
+  out.push({id:'b'+t.addr,bt:1,title:name,s:t.mine?'Your tracker.':"A tracker that isn't yours, "+rband(m)+'. Seen for '+Math.max(1,Math.round(t.seen_s/60))+' min.',col:t.mine?'good':'watch',fl:!t.mine,m,mine:t.mine,addr:t.addr,
+   det:'Address: '+t.addr+'\\nSignal: '+t.rssi+' dBm (about '+Math.round(m)+' m)\\nHeard for: '+t.seen_s+' s'})});
+ return out}
+function drawMini(id,list){const c=document.getElementById(id),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-10,cs=getComputedStyle(document.documentElement);
+ const col={good:cs.getPropertyValue('--ok').trim()||'#35e07a',watch:'#ffb000',alert:'#ff3b3b',neutral:'#6f9a80'};
+ x.clearRect(0,0,W,W);x.strokeStyle=cs.getPropertyValue('--ring').trim()||'#2a6';x.lineWidth=1.2;x.globalAlpha=.6;
+ [.25,.5,.75,.98].forEach(f=>{x.beginPath();x.arc(cx,cx,R*f,0,7);x.stroke()});x.beginPath();x.moveTo(cx-R,cx);x.lineTo(cx+R,cx);x.moveTo(cx,cx-R);x.lineTo(cx,cx+R);x.stroke();x.globalAlpha=1;
+ list.slice().sort((a,b)=>a.fl-b.fl).forEach(it=>{let h=0;for(const ch of it.id)h=(h*31+ch.charCodeAt(0))>>>0;const a=(h%3600)/3600*2*Math.PI,f=0.05+0.9*rpos(it.m),px=cx+Math.cos(a)*f*R,py=cx+Math.sin(a)*f*R;
+  if(it.fl){x.fillStyle=col[it.col];x.globalAlpha=.25;x.beginPath();x.arc(px,py,11,0,7);x.fill();x.globalAlpha=1}
+  x.fillStyle=col[it.col];x.beginPath();x.arc(px,py,it.fl?6:4,0,7);x.fill()});
+ x.fillStyle='#58a6ff';x.fillRect(cx-4,cx-4,8,8)}
+let OPEN=new Set();
+function drawCards(d){const all=rcItems(d),chk=all.filter(i=>i.fl).length;drawMini('scbt',all.filter(i=>i.bt));drawMini('scwf',all.filter(i=>!i.bt));
+ rchead.innerHTML=chk?'<span class=e-watch>'+chk+' to check</span>':'<span style="color:var(--ok)">Nothing needs your attention.</span>';
+ rcards.innerHTML=all.sort((a,b)=>b.fl-a.fl||a.m-b.m).slice(0,12).map(i=>{const open=OPEN.has(i.id);
+  return `<div class=card style="margin:6px 0"><b style="color:${{good:'var(--ok)',watch:'var(--watch)',alert:'var(--alert)',neutral:'var(--mut)'}[i.col]}">&#9679;</b> <b>${i.bt?'Bluetooth':'Wi-Fi'} &middot; ${E(i.title)}</b><div style="font-size:14px;margin:4px 0">${E(i.s)}</div>${open?`<pre class=m style="font-size:12px;white-space:pre-wrap">${E(i.det)}</pre>`:''}
+  <button class=s data-a="${E(i.addr)}" data-b="${i.bt}" onclick="this.dataset.b==='1'?findB(this.dataset.a):findW(this.dataset.a)">Find it</button>
+  ${i.mine?'':(i.bt?`<button class=s data-a="${E(i.addr)}" onclick="mine(this.dataset.a,1)">This is mine</button>`:(i.ssid?`<button class=s data-s="${E(i.ssid).replace(/"/g,'&quot;')}" onclick="post('/api/mynet?on=1&ssid='+encodeURIComponent(this.dataset.s))">This is mine</button>`:`<button class=s data-k="${E(i.wk)}" onclick="post('/api/minewifi?on=1&key='+encodeURIComponent(this.dataset.k))">This is mine</button>`))}
+  <button class=s data-i="${E(i.id)}" onclick="OPEN.has(this.dataset.i)?OPEN.delete(this.dataset.i):OPEN.add(this.dataset.i);drawCards(LAST)">${open?'Hide details':'Details'}</button></div>`}).join('')}
+async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawCards(d);drawDrone(d);
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
 banner(d);drawDefcon(d);drawCalm(d);drawExec(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${SW(s.level).toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
 ev.innerHTML=d.events.map(e=>`<tr class="e-${e.level}"><td>${new Date(e.ts*1000).toLocaleTimeString()}</td><td>${LW(e.level)}</td><td>${e.domain}</td><td>${E(e.msg)}</td></tr>`).join('')||'<tr><td class=m>nothing yet</td></tr>';
