@@ -4,7 +4,7 @@ import subprocess
 import time
 from collections import deque
 
-from . import oui, remoteid
+from . import oui, presence, remoteid
 
 DRONE_SSID = re.compile(r"^(DJI|TELLO|MAVIC|PHANTOM|SPARK|MAVIC|PARROT|ANAFI|BEBOP|SKYDIO|AUTEL|HOLYSTONE|"
                         r"POTENSIC|HUBSAN|FIMI|YUNEEC|RYZE|SYMA|WLT|RC-?UFO|DRONE|FPV)[-_ ]?", re.I)
@@ -121,9 +121,11 @@ class WifiDetector:
         self.first_pass = not self.known
         self.last_drone = 0
         self.hist = {}   # bssid -> recent signal readings, for the find view
+        self.presence = presence.PresenceTracker()
 
     def start(self):
         import threading
+        self.eng.db.exec("INSERT INTO presence VALUES(?,?,?,?,0,0)", (time.time(), "*", "", presence.START))
         threading.Thread(target=self._loop, daemon=True, name="wifi").start()
 
     def scan(self):
@@ -155,6 +157,8 @@ class WifiDetector:
 
     def evaluate(self, bss_list):
         eng = self.eng
+        for ev in self.presence.on_scan(time.time(), bss_list):
+            eng.db.exec("INSERT INTO presence VALUES(?,?,?,?,?,?)", ev)
         drone_hits, cam_hits, new_aps = [], [], []
         for b in bss_list:
             ven = oui.vendor(b["bssid"], bssid=True)

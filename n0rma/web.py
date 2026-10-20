@@ -91,9 +91,9 @@ html.norain #rain{display:none}
 2. Use Nearby to see every Wi-Fi network and Bluetooth device in range.<br>
 3. Use Settings to set your home location (for the drone map and distances) and see your known Wi-Fi networks.<br>
 4. Everything stays on this computer except the optional address lookup in Settings. Use the theme menu at the top for a calm, night-vision or classic look.</p>
-<button class=s onclick="document.getElementById('welcome').style.display='none';try{localStorage.setItem('hw_welcomed','1')}catch(e){}">Got it</button></div>
+<button class=s onclick="document.getElementById('welcome').style.display='none';try{localStorage.setItem('n0rma_welcomed','1')}catch(e){}">Got it</button></div>
 <div id=banner class=banner><b>Starting...</b></div><div id=tiles></div><div id=trk></div><div id=camq></div>
-<p><button onclick="fetch('/api/beep',{method:'POST',headers:{'X-Homewatch':'1'}}).then(load)">I heard the sensor beep - log it now</button></p>
+<p><button onclick="fetch('/api/beep',{method:'POST',headers:{'X-N0rma':'1'}}).then(load)">I heard the sensor beep - log it now</button></p>
 </div></div>
 <div data-tab=radar><div class=card><h2>Proximity radar <span class=m id=rstat>RANGE ONLY</span> <button class=s id=rhelpb onclick="rhelp.style.display=rhelp.style.display?'':'none'">?</button></h2>
 <p id=rhelp class=m style="display:none;font-size:12px">Distance is estimated from signal strength and can be off indoors. This computer has no compass, so contacts are listed in the lane under the scope (nearer to the left, farther to the right): their position shows distance only, never direction. The Android app can measure a real direction: tap a contact and turn in place. The sweep beam is decoration.</p>
@@ -115,6 +115,9 @@ html.norain #rain{display:none}
 <p><b>On this computer:</b> check for unfamiliar remote-access tools or startup programs; N0RMA's own "This computer" tile already watches for new listening ports and remote-access software.</p>
 <p><b>More help:</b> the Coalition Against Stalkerware (stopstalkerware.org) explains the signs and what to do.</p>
 </div></details>
+<div class=card><h2>Presence log <span class=m>last 24 h</span></h2>
+<p style="font-size:12px;color:var(--mut)">Wi-Fi sources that hide their name or use a private address, and how long each was around. A source that is always there is usually a neighbour's router. A new one that appears only when you are home deserves a look. Quiet only means something if N0RMA was scanning.</p>
+<div id=presbox class=m>loading...</div></div>
 <div class=card><h2>Recent events</h2><table id=ev></table></div></div>
 <div data-tab=status>
 <details class=card><summary><b>If something is flagged - what to do</b></summary><div style="font-size:14px;line-height:1.5">
@@ -142,7 +145,7 @@ html.norain #rain{display:none}
 <p style="font-size:12px;color:var(--mut)">Marked "this is my network" on the Nearby tab; they show green on the radar.</p>
 <div id=mySsids></div>
 </div>
-<div class=card><p style="font-size:11px;color:var(--faint)">N0RMA - detect-only. Nothing leaves this computer except the optional address lookup above. Formerly called Homewatch.</p></div>
+<div class=card><p style="font-size:11px;color:var(--faint)">N0RMA - detect-only. Nothing leaves this computer except the optional address lookup above.</p></div>
 </div>
 <div data-tab=smart><div class=card><h2>Smart devices and privacy</h2>
 <p style="font-size:12px;color:var(--mut)">Gadgets that listen, watch or share your connection, sorted by network name, Bluetooth name and maker. A name match is a hint, not proof; a device that hides its name won't show up here.</p>
@@ -161,15 +164,15 @@ html.norain #rain{display:none}
 <div class=card><h2>Bluetooth trackers / drones in range</h2><table id=ble></table></div></div>
 <script>
 function setTheme(t){if(!['calm','night','executive','classic'].includes(t))t='calm';const h=document.documentElement;h.classList.toggle('night',t==='night');h.classList.toggle('executive',t==='executive');h.classList.toggle('classic',t==='classic');themeSel.value=t;try{localStorage.setItem('n0rma_theme',t)}catch(e){}try{if(LAST)drawRadar(LAST)}catch(e){}}
-let TH='calm';try{TH=new URLSearchParams(location.search).get('theme')||localStorage.getItem('n0rma_theme')||(localStorage.getItem('hw_night')==='1'?'night':'calm')}catch(e){}
+let TH='calm';try{TH=new URLSearchParams(location.search).get('theme')||localStorage.getItem('n0rma_theme')||(localStorage.getItem('n0rma_night')==='1'?'night':'calm')}catch(e){}
 setTheme(TH);themeSel.onchange=()=>setTheme(themeSel.value);
 function showTab(t){document.querySelectorAll('[data-tab]').forEach(e=>e.style.display=e.dataset.tab===t?'':'none');
- document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));try{localStorage.setItem('hw_tab',t)}catch(e){}}
+ document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));try{localStorage.setItem('n0rma_tab',t)}catch(e){}}
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.t));
-let T0='status';try{T0=localStorage.getItem('hw_tab')||'status'}catch(e){}showTab(['status','nearby','radar','history','settings'].includes(T0)?T0:'status');
-try{if(localStorage.getItem('hw_welcomed')!=='1')document.getElementById('welcome').style.display=''}catch(e){document.getElementById('welcome').style.display=''}
+let T0='status';try{T0=localStorage.getItem('n0rma_tab')||'status'}catch(e){}showTab(['status','nearby','radar','history','settings'].includes(T0)?T0:'status');
+try{if(localStorage.getItem('n0rma_welcomed')!=='1')document.getElementById('welcome').style.display=''}catch(e){document.getElementById('welcome').style.display=''}
 async function nameDev(mac,cur){const v=prompt('Name for this device (blank clears it):',cur||'');if(v===null)return;await post('/api/label?mac='+mac+'&label='+encodeURIComponent(v.trim()))}
-const post=async u=>{await fetch(u,{method:'POST',headers:{'X-Homewatch':'1'}});load()};
+const post=async u=>{await fetch(u,{method:'POST',headers:{'X-N0rma':'1'}});load()};
 async function loadHome(){const d=LAST||await (await fetch('/api/status')).json();
  document.getElementById('homeNow').innerHTML=d.home?('Set: '+d.home.lat.toFixed(5)+', '+d.home.lon.toFixed(5)+' - <a href="https://www.google.com/maps?q='+d.home.lat+','+d.home.lon+'&z=17'+'" target=_blank>view on map</a>'):'Not set.';
  document.getElementById('mySsids').innerHTML=(d.my_ssids||[]).length?(d.my_ssids||[]).map(s=>`<div>${E(s)} <button class=s onclick="post('/api/mynet?on=0&ssid='+encodeURIComponent(this.dataset.s))" data-s="${E(s).replace(/"/g,'&quot;')}">not mine</button></div>`).join(''):'<span class=m>none yet</span>'}
@@ -193,7 +196,7 @@ let LAST=null,MY=new Set();
 let FIND=null,BEST={};
 function findW(k){FIND={t:'w',k:k};showTab('nearby');load()}
 function findB(k){FIND={t:'b',k:k};showTab('nearby');load()}
-async function mineW(k){await fetch('/api/minewifi?on=1&key='+encodeURIComponent(k),{method:'POST',headers:{'X-Homewatch':'1'}});load()}
+async function mineW(k){await fetch('/api/minewifi?on=1&key='+encodeURIComponent(k),{method:'POST',headers:{'X-N0rma':'1'}});load()}
 function drawFind(d){const c=document.getElementById('findcard');if(!FIND){c.style.display='none';return}
  let h=[],label='',now=null;
  if(FIND.t==='w'){const r=(d.live.wifi||[]).find(x=>x.bssid===FIND.k);h=(d.live.wifi_hist||{})[FIND.k]||[];label=r?(r.ssid||'(hidden)')+' '+r.bssid:FIND.k;now=r?r.signal:null}
@@ -206,7 +209,7 @@ function drawFind(d){const c=document.getElementById('findcard');if(!FIND){c.sty
  const cv=document.getElementById('fcv'),x=cv.getContext('2d'),W=cv.width,H=cv.height,dark=true;x.clearRect(0,0,W,H);x.strokeStyle='#2a2a2a';x.strokeRect(1,1,W-2,H-2);
  const Y=v=>H-((Math.max(-100,Math.min(-30,v))+100)/70)*H;if(BEST[key]!==undefined){x.setLineDash([8,6]);x.strokeStyle='#b39a55';x.beginPath();x.moveTo(0,Y(BEST[key]));x.lineTo(W,Y(BEST[key]));x.stroke();x.setLineDash([])}
  if(h.length>1){x.strokeStyle='#5e9a74';x.lineWidth=2;x.beginPath();h.forEach((v,i)=>{const px=i*(W/(h.length-1));i?x.lineTo(px,Y(v)):x.moveTo(px,Y(v))});x.stroke();x.fillStyle='#c06a6a';x.beginPath();x.arc(W,Y(h[h.length-1]),4,0,7);x.fill()}}
-async function mine(a,on){await fetch('/api/mine?addr='+encodeURIComponent(a)+'&on='+on,{method:'POST',headers:{'X-Homewatch':'1'}});load()}
+async function mine(a,on){await fetch('/api/mine?addr='+encodeURIComponent(a)+'&on='+on,{method:'POST',headers:{'X-N0rma':'1'}});load()}
 const C=()=>getComputedStyle(document.documentElement);
 function hash(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return h}
 function rssiToM(r,tx){return Math.pow(10,(tx-r)/25)}   // log-distance, n=2.5 (rough, indoors)
@@ -238,9 +241,9 @@ function drawDefcon(d){const n=defcon(d.state),el=document.getElementById('defco
    x.fillStyle=Math.random()<.04?(night?'#aa4040':'#e0ffe8'):(night?'#6e2a2a':'#35e07a');x.fillText(ch,i*FS,drops[i]*FS);
    if(drops[i]*FS>c.height&&Math.random()>.975)drops[i]=0;drops[i]+=1}}
  setInterval(tick,60);
- let RN=true;try{RN=localStorage.getItem('hw_rain')!=='0'}catch(e){}
+ let RN=true;try{RN=localStorage.getItem('n0rma_rain')!=='0'}catch(e){}
  const t=document.getElementById('rainT');t.checked=RN&&!RM;document.documentElement.classList.toggle('norain',!t.checked);
- t.onchange=()=>{document.documentElement.classList.toggle('norain',!t.checked);x.clearRect(0,0,c.width,c.height);try{localStorage.setItem('hw_rain',t.checked?'1':'0')}catch(e){}}})();
+ t.onchange=()=>{document.documentElement.classList.toggle('norain',!t.checked);x.clearRect(0,0,c.width,c.height);try{localStorage.setItem('n0rma_rain',t.checked?'1':'0')}catch(e){}}})();
 function radarAlpha(sweep,a,pulse){const dl=((sweep-a)%(2*Math.PI)+2*Math.PI)%(2*Math.PI);const f=.15+.85*Math.exp(-dl/1.7);return pulse?Math.max(.7,f):f}
 function drawRadar(d){const c=document.getElementById('radar'),x=c.getContext('2d'),W=c.width,cx=W/2,R=W/2-30;
  x.clearRect(0,0,W,770);const night=document.documentElement.classList.contains('night');
@@ -327,6 +330,8 @@ function drawExec(d){
  xsub.textContent=open.length?open.length+(open.length===1?' open item.':' open items.'):'No open items.';
  xlist.innerHTML=open.slice(0,3).map(e=>`<div class=xe><div class=h style="color:${e.level==='alert'?'var(--alert)':'var(--watch)'}">${LW(e.level)} · ${new Date(e.ts*1000).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'})}</div><div>${E(e.msg)}</div><button class=s onclick="resolveEv(${+e.id},1)">Mark resolved</button></div>`).join('')||'<p class=m>Nothing open.</p>';
  xrb.innerHTML=rbcard.innerHTML}
+async function loadPres(){try{const d=await (await fetch('/api/presence')).json();const f=s=>s>=3600?(s/3600).toFixed(1)+' h':Math.round(s/60)+' min';
+ presbox.innerHTML=`<div class=m>Scanning covered ${f(d.scanned)} of the last 24 h.</div>`+(d.sources.length?'<table>'+d.sources.map(x=>`<tr><td>${E(x.label)}${x.hidden?' <span class=m>(hidden)</span>':''}</td><td class=m>${x.key.replace('wifi:','')}</td><td>${f(x.total)}</td><td>${x.appearances}x</td><td class=m>${new Date(x.last*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</td></tr>`).join('')+'</table>':'<div class=m>Nothing logged yet.</div>')}catch(e){}}
 async function load(){try{const d=await (await fetch('/api/status')).json();LAST=d;MY=new Set(d.my_ssids||[]);drawRadar(d);drawDrone(d);
 document.getElementById('t').textContent=new Date(d.now*1000).toLocaleTimeString();loadHome();
 banner(d);drawDefcon(d);drawCalm(d);drawExec(d);tiles.innerHTML=Object.values(d.state).map(s=>`<div class="tile ${s.level}"><b>${ICON[s.level]} ${SW(s.level).toUpperCase()} · ${E(s.title)}</b><span>${E(s.msg)}</span></div>`).join('');
@@ -344,7 +349,7 @@ document.getElementById('trk').innerHTML=unk.length?'<div class=card><h2>Tracker
 const b=d.live.ble||{trackers:[],drones:[]};
 ble.innerHTML=[...b.drones.map(x=>['DRONE',x]),...b.trackers.map(x=>['tracker',x])].map(([k,x])=>`<tr><td>${k}${x.mine?' <b>(yours)</b>':''}</td><td>${E(x.label)}</td><td>${x.addr}</td><td>${x.rssi} dBm <button class=s data-k="${String(x.addr).replace(/[^0-9A-Fa-f:]/g,'')}" onclick="findB(this.dataset.k)">find</button></td><td>${x.seen_s}s</td><td>${k==='tracker'?`<button class=s onclick="mine('${x.addr}',${x.mine?0:1})">${x.mine?'not mine':'this is mine'}</button>`:''}</td></tr>`).join('')||'<tr><td class=m>none</td></tr>';
 }catch(e){}}
-load();setInterval(load,2500);setInterval(()=>{if(LAST&&!document.hidden)drawRadar(LAST)},RM?500:50);</script>"""
+load();loadPres();setInterval(loadPres,60000);setInterval(load,2500);setInterval(()=>{if(LAST&&!document.hidden)drawRadar(LAST)},RM?500:50);</script>"""
 
 
 from .core import clean  # noqa: E402
@@ -373,7 +378,7 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                 return True
             try:
                 ck = SimpleCookie(self.headers.get("Cookie", ""))
-                v = ck["hw_k"].value if "hw_k" in ck else ""
+                v = ck["n0rma_k"].value if "n0rma_k" in ck else ""
             except Exception:
                 v = ""
             return hmac.compare_digest(v.encode(), token.encode())
@@ -402,6 +407,17 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                 except Exception:
                     pass
                 self._send(200, json.dumps(snap, default=str))
+            elif path == "/api/presence":
+                import time as _t
+                from . import presence
+                now = _t.time()
+                rows = eng.db.query("SELECT ts,key,label,kind FROM presence WHERE ts>? ORDER BY ts", (now - 30 * 86400,))
+                ev = [(r["ts"], r["key"], r["label"], r["kind"]) for r in rows]
+                win = 86400.0
+                src = presence.summarize(ev, now, win, True)
+                src.sort(key=lambda x: -x["total"])
+                self._send(200, json.dumps({"window": win, "scanned": presence.scanning_seconds(ev, now, win, True),
+                                            "sources": [{k: v for k, v in x.items() if k != "intervals"} for x in src[:40]]}))
             elif path == "/api/evidence":
                 from . import evidence
                 from .core import clean
@@ -432,14 +448,14 @@ def serve(eng, host="127.0.0.1", port=8777, token=None):
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(b)))
                 if token:
-                    self.send_header("Set-Cookie", f"hw_k={token}; Path=/; Max-Age=31536000; SameSite=Strict; HttpOnly")
+                    self.send_header("Set-Cookie", f"n0rma_k={token}; Path=/; Max-Age=31536000; SameSite=Strict; HttpOnly")
                 self.end_headers()
                 self.wfile.write(b)
             else:
                 self._send(404, "{}")
 
         def do_POST(self):
-            if not self._authed() or self.headers.get("X-Homewatch") != "1":
+            if not self._authed() or self.headers.get("X-N0rma") != "1":
                 return self._send(403, "{}")  # custom header forces a CORS preflight -> cross-site POSTs die
             if self.path.startswith("/api/mine"):
                 q = parse_qs(urlparse(self.path).query)

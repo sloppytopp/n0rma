@@ -225,7 +225,7 @@ class WebSecurity(unittest.TestCase):
     def test_post_needs_custom_header(self):
         eng, srv, port = self._srv(None)
         self.assertEqual(self._req(port, "POST", "/api/beep"), 403)
-        self.assertEqual(self._req(port, "POST", "/api/beep", {"X-Homewatch": "1"}), 200)
+        self.assertEqual(self._req(port, "POST", "/api/beep", {"X-N0rma": "1"}), 200)
         self.assertEqual(len(eng.db.query("SELECT * FROM beeps")), 1)
         srv.shutdown()
 
@@ -234,8 +234,8 @@ class WebSecurity(unittest.TestCase):
         self.assertEqual(self._req(port, "GET", "/api/status"), 401)
         self.assertEqual(self._req(port, "GET", "/api/status?k=nope"), 401)
         self.assertEqual(self._req(port, "GET", "/api/status?k=s3cr3t"), 200)
-        self.assertEqual(self._req(port, "GET", "/api/status", {"Cookie": "hw_k=s3cr3t"}), 200)
-        self.assertEqual(self._req(port, "GET", "/api/status", {"Cookie": "x=hw_k=s3cr3t"}), 401)  # no substring match
+        self.assertEqual(self._req(port, "GET", "/api/status", {"Cookie": "n0rma_k=s3cr3t"}), 200)
+        self.assertEqual(self._req(port, "GET", "/api/status", {"Cookie": "x=n0rma_k=s3cr3t"}), 401)  # no substring match
         srv.shutdown()
 
 
@@ -265,7 +265,7 @@ class MineFeature(unittest.TestCase):
             c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
             c.request("POST", path, headers=hdr or {})
             r = c.getresponse(); r.read(); c.close(); return r.status
-        h = {"X-Homewatch": "1"}
+        h = {"X-N0rma": "1"}
         self.assertEqual(post("/api/mine?addr=AA:BB:CC:DD:EE:FF&on=1"), 403)               # no header
         self.assertEqual(post("/api/mine?addr=not-an-address&on=1", h), 400)               # validated
         self.assertEqual(post("/api/mine?addr=aa:bb:cc:dd:ee:ff&on=1", h), 200)
@@ -461,7 +461,7 @@ def test_web_settings_routes(tmp_path):
         def post(p):
             try:
                 return urllib.request.urlopen(urllib.request.Request(
-                    "http://127.0.0.1:18799" + p, method="POST", headers={"X-Homewatch": "1"}))
+                    "http://127.0.0.1:18799" + p, method="POST", headers={"X-N0rma": "1"}))
             except urllib.error.HTTPError as e:
                 return e
 
@@ -565,7 +565,7 @@ def _srv(eng):
 
     def post(path):
         c = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-        c.request("POST", path, headers={"X-Homewatch": "1"})
+        c.request("POST", path, headers={"X-N0rma": "1"})
         r = c.getresponse(); body = r.read(); c.close(); return r.status, body
     return srv, post
 

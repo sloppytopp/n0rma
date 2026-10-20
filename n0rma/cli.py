@@ -431,12 +431,6 @@ def cmd_selftest(a):
     sys.exit(unittest.main(module=None, argv=["x", "discover", "-s", "tests", "-t", "."]))
 
 
-def legacy():
-    """Old `homewatch` command: still works, but says it was renamed."""
-    print("note: homewatch is now called n0rma - use `n0rma` from now on.", file=sys.stderr)
-    main()
-
-
 def main():
     p = argparse.ArgumentParser(prog="n0rma", description="Home counter-surveillance detector")
     sp = p.add_subparsers(dest="cmd", required=True)

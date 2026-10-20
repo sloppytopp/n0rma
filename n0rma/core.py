@@ -10,12 +10,18 @@ import threading
 import time
 
 def _data_dir():
-    """N0RMA_DIR (or the old HOMEWATCH_DIR); else keep using an existing pre-rename folder so nothing is lost."""
-    env = os.environ.get("N0RMA_DIR") or os.environ.get("HOMEWATCH_DIR")
+    """N0RMA_DIR, else ~/.local/share/n0rma. A folder from before the rename is moved over once, data intact."""
+    env = os.environ.get("N0RMA_DIR")
     if env:
         return env
     old, new = (os.path.expanduser(f"~/.local/share/{n}") for n in ("homewatch", "n0rma"))
-    return old if os.path.isdir(old) and not os.path.isdir(new) else new
+    if os.path.isdir(old) and not os.path.isdir(new):
+        os.rename(old, new)
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            src = os.path.join(new, "homewatch.db" + suffix)
+            if os.path.exists(src):
+                os.rename(src, os.path.join(new, "n0rma.db" + suffix))
+    return new
 
 
 DATA_DIR = _data_dir()
@@ -74,14 +80,15 @@ CREATE TABLE IF NOT EXISTS devices(mac TEXT PRIMARY KEY, first_seen REAL, last_s
   ip TEXT, vendor TEXT, klass TEXT, ports TEXT, trusted INTEGER DEFAULT 0,
   label TEXT DEFAULT '', hostname TEXT DEFAULT '', name_ip TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS presence(ts REAL, key TEXT, label TEXT, kind TEXT, rssi REAL, freq INTEGER);
+CREATE INDEX IF NOT EXISTS pr_ts ON presence(ts);
 """
 
 
 class DB:
     def __init__(self, path=None):
         os.makedirs(DATA_DIR, exist_ok=True)
-        old_db = os.path.join(DATA_DIR, "homewatch.db")
-        self.path = path or (old_db if os.path.exists(old_db) else os.path.join(DATA_DIR, "n0rma.db"))
+        self.path = path or os.path.join(DATA_DIR, "n0rma.db")
         self.c = sqlite3.connect(self.path, check_same_thread=False)
         self.c.row_factory = sqlite3.Row
         self.lock = threading.Lock()
@@ -107,6 +114,7 @@ class DB:
         """Retention: don't keep sighting history forever."""
         self.exec("DELETE FROM events WHERE ts < ?", (time.time() - days * 86400,))
         self.exec("DELETE FROM beeps WHERE ts < ?", (time.time() - 365 * 86400,))
+        self.exec("DELETE FROM presence WHERE ts < ?", (time.time() - days * 86400,))
 
     def kv_get(self, k, default=None):
         r = self.query("SELECT v FROM kv WHERE k=?", (k,))
@@ -184,7 +192,7 @@ class Engine:
         if push:
             threading.Thread(target=self.push, args=(push,), daemon=True).start()
         # Soft chime only - no voice. Set N0RMA_SOUND=off to silence completely.
-        if (os.environ.get("N0RMA_SOUND") or os.environ.get("HOMEWATCH_SOUND") or "ding") != "off" and shutil.which("paplay"):
+        if (os.environ.get("N0RMA_SOUND") or "ding") != "off" and shutil.which("paplay"):
             snd = "/usr/share/sounds/freedesktop/stereo/message.oga"
             subprocess.Popen(["paplay", snd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if shutil.which("notify-send"):
