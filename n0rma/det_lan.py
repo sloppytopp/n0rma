@@ -34,7 +34,8 @@ def local_net():
 
 
 def ping(ip):
-    subprocess.run(["ping", "-c", "1", "-W", "1", str(ip)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    """True if the host answered. The kernel's neighbour table is NOT proof of that: it keeps a device it has stopped hearing from."""
+    return subprocess.run(["ping", "-c", "1", "-W", "1", str(ip)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
 def lookup_hostname(ip):
@@ -118,7 +119,7 @@ class LanDetector:
             return
         hosts = [str(h) for h in me.network.hosts() if str(h) != str(me.ip)]
         with cf.ThreadPoolExecutor(64) as ex:
-            list(ex.map(ping, hosts))
+            answered = {h for h, ok in zip(hosts, ex.map(ping, hosts)) if ok}
         neigh = parse_neigh(subprocess.run(["ip", "neigh", "show", "dev", ifc], capture_output=True, text=True).stdout)
         now = time.time()
         known = {d["mac"]: d for d in eng.db.query("SELECT * FROM devices")}
@@ -134,6 +135,7 @@ class LanDetector:
             ven = oui.vendor(mac)
             klass = oui.classify(ven)
             pts = ports.get(ip, {})
+            live = ip in answered or bool(pts) or ip == gw   # in the neighbour table is not enough; it must have replied this scan
             if klass in ("other", "iot") and set(pts) & oui.STRONG_VIDEO_PORTS:
                 klass = "camera?"  # unknown vendor exposing real camera/NVR protocol ports
             if mac not in known:
@@ -142,13 +144,13 @@ class LanDetector:
                             (mac, now, now, ip, ven, klass, ",".join(map(str, pts)), 0))
                 if self.baseline_done:
                     newcomers.append((ip, mac, ven, klass, pts))
-            else:
+            elif live or not known[mac].get("trusted"):   # a silent but untrusted device must never age out of the review count
                 eng.db.exec("UPDATE devices SET last_seen=?, ip=?, klass=?, ports=? WHERE mac=?",
                             (now, ip, klass, ",".join(map(str, pts)), mac))
                 if ip in names:      # looked up this scan: a blank answer clears a name that belonged to the old IP
                     eng.db.exec("UPDATE devices SET hostname=?, name_ip=? WHERE mac=?", (names[ip], ip, mac))
                     known[mac]["hostname"], known[mac]["name_ip"] = names[ip], ip
-            inventory.append({"ip": ip, "mac": mac, "vendor": ven, "klass": klass,
+            inventory.append({"ip": ip, "mac": mac, "vendor": ven, "klass": klass, "live": live,
                               "ports": pts, "gateway": ip == gw,
                               "trusted": bool(known.get(mac, {}).get("trusted")),
                               "label": known.get(mac, {}).get("label") or "",

@@ -670,3 +670,39 @@ console.log(JSON.stringify({{head:xhead.textContent,sub:xsub.textContent,list:xl
     assert r["sub"] == "6 open items."                              # event 6 is resolved
     assert r["list"].count("Mark resolved") == 3                     # at most three shown
     assert "<script>" not in r["list"]
+
+
+class LanLiveness(unittest.TestCase):
+    def _scan(self, answered, trusted):
+        from unittest import mock
+        eng = Engine(DB(":memory:"), quiet=True)
+        eng.db.exec("INSERT INTO devices(mac,first_seen,last_seen,ip,vendor,klass,ports,trusted) VALUES('aa:bb:cc:dd:ee:07',1,1,'192.168.0.7','x','other','',?)", (trusted,))
+        det = det_lan.LanDetector(eng); det.baseline_done = True
+        eng.db.kv_set("lan_subnet", "192.168.0.0/24")
+        import ipaddress
+        me = ipaddress.ip_interface("192.168.0.50/24")
+        neigh = "192.168.0.7 lladdr aa:bb:cc:dd:ee:07 STALE\n192.168.0.1 lladdr 00:11:22:33:44:55 REACHABLE\n"
+        with mock.patch.object(det_lan, "local_net", lambda: ("192.168.0.1", "x", me)), \
+                mock.patch.object(det_lan, "ping", lambda ip: ip in answered), \
+                mock.patch.object(det_lan, "probe_ports", lambda ip: {}), \
+                mock.patch.object(det_lan, "lookup_hostname", lambda ip: ""), \
+                mock.patch.object(det_lan.subprocess, "run", lambda *a, **k: mock.Mock(stdout=neigh, returncode=0)):
+            det.scan()
+        row = eng.db.query("SELECT last_seen FROM devices WHERE mac='aa:bb:cc:dd:ee:07'")[0]
+        inv = {d["ip"]: d for d in eng.live["lan"]}
+        return row["last_seen"], inv
+
+    def test_silent_trusted_device_is_listed_but_not_marked_seen(self):
+        seen, inv = self._scan(answered=set(), trusted=1)
+        self.assertEqual(seen, 1)
+        self.assertFalse(inv["192.168.0.7"]["live"])
+
+    def test_silent_untrusted_device_still_counts_for_review(self):
+        seen, inv = self._scan(answered=set(), trusted=0)
+        self.assertGreater(seen, 1)
+        self.assertIn("192.168.0.7", inv)
+
+    def test_answering_device_is_live(self):
+        seen, inv = self._scan(answered={"192.168.0.7"}, trusted=1)
+        self.assertGreater(seen, 1)
+        self.assertTrue(inv["192.168.0.7"]["live"])
