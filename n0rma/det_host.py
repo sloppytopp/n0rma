@@ -176,7 +176,7 @@ class HostDetector:
             self.base_ports, self.base_usb, self.learn = ports, usb, False
             eng.db.kv_set("host_ports", sorted(ports))
             eng.db.kv_set("host_usb", sorted(usb))
-        watching = []
+        watching = [f"{t} has the microphone open for a level meter (Sound settings); close that window to clear this" for t in sorted(set(meters))]
         # new listening ports: harmless ones are logged once and then treated as normal; reachable ones stay red until approved
         for p in sorted(ports - self.base_ports):
             if port_class(p) == "info":
