@@ -61,6 +61,17 @@ def drop_ambiguous(names):
     return {ip: ("" if n and count[n] > 1 else n) for ip, n in names.items()}
 
 
+def shared_names(devices, now, window=30 * 86400):
+    """Names stored for more than one device seen recently. A name was looked up by IP, and the router's lease table can lag behind IP changes,
+    so the same name turns up on several devices (a stale "Android" on someone's iPhone). A name that points at two devices names neither."""
+    count = {}
+    for d in devices:
+        n = (d.get("hostname") or "").strip().lower()
+        if n and now - (d.get("last_seen") or 0) <= window:
+            count[n] = count.get(n, 0) + 1
+    return {n for n, c in count.items() if c > 1}
+
+
 def probe_ports(ip, ports=tuple(VIDEO_PORTS)):
     found = {}
     for p in ports:
@@ -130,6 +141,7 @@ class LanDetector:
                 if not (known.get(mac) or {}).get("hostname") or known[mac].get("name_ip") != ip]
         with cf.ThreadPoolExecutor(8) as ex:
             names = drop_ambiguous(dict(zip(need, ex.map(lookup_hostname, need))))
+        dup = shared_names(known.values(), now)
         cams, newcomers, inventory = [], [], []
         for ip, mac in neigh.items():
             ven = oui.vendor(mac)
@@ -150,11 +162,12 @@ class LanDetector:
                 if ip in names:      # looked up this scan: a blank answer clears a name that belonged to the old IP
                     eng.db.exec("UPDATE devices SET hostname=?, name_ip=? WHERE mac=?", (names[ip], ip, mac))
                     known[mac]["hostname"], known[mac]["name_ip"] = names[ip], ip
+            host = known.get(mac, {}).get("hostname") or names.get(ip, "")
             inventory.append({"ip": ip, "mac": mac, "vendor": ven, "klass": klass, "live": live,
                               "ports": pts, "gateway": ip == gw,
                               "trusted": bool(known.get(mac, {}).get("trusted")),
                               "label": known.get(mac, {}).get("label") or "",
-                              "hostname": known.get(mac, {}).get("hostname") or names.get(ip, "")})
+                              "hostname": "" if host.strip().lower() in dup else host})
             if klass.startswith("camera") or pts:
                 cams.append(inventory[-1])
         # --- status

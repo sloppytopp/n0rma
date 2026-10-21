@@ -82,3 +82,11 @@ class LanNamingTest(unittest.TestCase):
         from n0rma.det_lan import drop_ambiguous
         self.assertEqual(drop_ambiguous({"1": "Android", "2": "Android", "3": "rudy", "4": ""}),
                          {"1": "", "2": "", "3": "rudy", "4": ""})
+
+    def test_name_shared_by_several_recent_devices_names_none_of_them(self):
+        from n0rma.det_lan import shared_names
+        now = 1_000_000_000
+        devs = [{"hostname": "Android", "last_seen": now - 10}, {"hostname": "android", "last_seen": now - 5000},
+                {"hostname": "HP6451066816A4", "last_seen": now}, {"hostname": "", "last_seen": now},
+                {"hostname": "Printer", "last_seen": now}, {"hostname": "Printer", "last_seen": now - 90 * 86400}]
+        self.assertEqual(shared_names(devs, now), {"android"})      # old device does not make a current name ambiguous
