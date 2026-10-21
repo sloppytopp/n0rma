@@ -25,3 +25,16 @@ class PortClassTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SettingsLevelMeterTest(unittest.TestCase):
+    BLK = '\n\t\tapplication.name = "cinnamon"\n\t\tapplication.process.id = "42"\n\t\tmedia.name = "Peak detect"\n\t\tstream.monitor = "true"\n'
+
+    def test_real_settings_window_is_not_a_recording(self):
+        from n0rma.det_host import is_settings_level_meter
+        self.assertTrue(is_settings_level_meter(self.BLK, lambda pid: ("cinnamon-settings", "/usr/bin/python3.12")))
+
+    def test_same_labels_from_another_program_still_alert(self):
+        from n0rma.det_host import is_settings_level_meter
+        self.assertFalse(is_settings_level_meter(self.BLK, lambda pid: ("cinnamon-settings", "/tmp/evil")))
+        self.assertFalse(is_settings_level_meter(self.BLK.replace("Peak detect", "Capture"), lambda pid: ("cinnamon-settings", "/usr/bin/python3.12")))

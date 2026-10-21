@@ -25,6 +25,26 @@ def fd_users(patterns):
     return hits
 
 
+def is_settings_level_meter(blk, proc_info=None):
+    """The Sound settings window opens a "Peak detect" monitor stream on the mic to draw its input level bar; that is the desktop's own meter,
+    not a recording. Judged by the real process behind the stream (its title and the system binary it runs), not by the name the client announces,
+    which any app can fake. [proc_info] is (pid -> (argv0, exe path)); injectable for tests."""
+    if 'media.name = "Peak detect"' not in blk or 'stream.monitor = "true"' not in blk:
+        return False
+    m = re.search(r'application.process.id = "(\d+)"', blk)
+    if not m:
+        return False
+
+    def real(pid):
+        argv0 = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")[0].decode(errors="replace")
+        return argv0, os.path.realpath(f"/proc/{pid}/exe")
+    try:
+        argv0, exe = (proc_info or real)(m.group(1))
+    except OSError:
+        return False
+    return argv0.rsplit("/", 1)[-1] == "cinnamon-settings" and exe.startswith(("/usr/bin/", "/usr/lib/"))
+
+
 def audio_recorders():
     """Apps actually recording audio via PipeWire/Pulse (not the audio server itself, not output monitors)."""
     try:
@@ -33,7 +53,7 @@ def audio_recorders():
         return None  # pactl unavailable
     apps = []
     for blk in out.split("Source Output #")[1:]:
-        if "Corked: yes" in blk:
+        if "Corked: yes" in blk or is_settings_level_meter(blk):
             continue
         m = re.search(r'application.name = "([^"]+)"', blk)
         src = re.search(r"Source: (\d+)", blk)
