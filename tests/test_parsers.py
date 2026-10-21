@@ -327,7 +327,7 @@ class HostNoise(unittest.TestCase):
         h.listening = lambda: set(ports)
         h.usb_devices = lambda: set(usb)
         h.fd_users = lambda pats: {}
-        h.audio_recorders = lambda: []
+        h.audio_recorders = lambda *a: []
         return h, eng, det
 
     def test_harmless_new_port_is_logged_once_then_normal(self):

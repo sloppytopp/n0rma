@@ -25,38 +25,56 @@ def fd_users(patterns):
     return hits
 
 
-def is_settings_level_meter(blk, proc_info=None):
-    """The Sound settings window opens a "Peak detect" monitor stream on the mic to draw its input level bar; that is the desktop's own meter,
-    not a recording. Judged by the real process behind the stream (its title and the system binary it runs), not by the name the client announces,
-    which any app can fake. [proc_info] is (pid -> (argv0, exe path)); injectable for tests."""
-    if 'media.name = "Peak detect"' not in blk or 'stream.monitor = "true"' not in blk:
-        return False
-    m = re.search(r'application.process.id = "(\d+)"', blk)
-    if not m:
-        return False
+def stream_props(blk):
+    """One `pactl list source-outputs` block -> (properties, ok). ok is False when a key appears twice: with duplicates a loose search and the
+    real value can disagree, so such a block is never treated as anything but a plain recording."""
+    props = {}
+    for line in blk.splitlines():
+        m = re.match(r'^\s*([\w.\-]+) = "(.*)"\s*$', line)
+        if m:
+            if m.group(1) in props:
+                return props, False
+            props[m.group(1)] = m.group(2)
+    return props, True
+
+
+def is_level_meter(blk, proc_info=None):
+    """The Sound settings window opens a "Peak detect" monitor stream on the mic to draw its input level bar. The process id here is announced by the
+    client (PipeWire's own attested pid is the pulse server, not the program), so this can be faked by anything running as you: a match is only ever
+    DOWNGRADED to a visible notice, never hidden. [proc_info]: pid -> (argv0, exe path), injectable for tests. Returns the program title or None."""
+    props, ok = stream_props(blk)
+    if not ok or props.get("media.name") != "Peak detect" or props.get("stream.monitor") != "true":
+        return None
+    pid = props.get("application.process.id", "")
+    if not pid.isdigit():
+        return None
 
     def real(pid):
         argv0 = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")[0].decode(errors="replace")
         return argv0, os.path.realpath(f"/proc/{pid}/exe")
     try:
-        argv0, exe = (proc_info or real)(m.group(1))
+        argv0, exe = (proc_info or real)(pid)
     except OSError:
-        return False
-    return argv0.rsplit("/", 1)[-1] == "cinnamon-settings" and exe.startswith(("/usr/bin/", "/usr/lib/"))
+        return None
+    title = argv0.rsplit("/", 1)[-1]
+    return title if title == "cinnamon-settings" and exe.startswith(("/usr/bin/", "/usr/lib/")) else None
 
 
-def audio_recorders():
-    """Apps actually recording audio via PipeWire/Pulse (not the audio server itself, not output monitors)."""
+def audio_recorders(meters=None):
+    """Apps actually recording audio via PipeWire/Pulse (not the audio server itself, not output monitors). Pass a list as [meters] to have
+    desktop level meters (see is_level_meter) reported there as a notice instead of as recorders; without it they count as recorders."""
     try:
         out = subprocess.run(["pactl", "list", "source-outputs"], capture_output=True, text=True, timeout=5).stdout
     except Exception:
         return None  # pactl unavailable
     apps = []
     for blk in out.split("Source Output #")[1:]:
-        if "Corked: yes" in blk or is_settings_level_meter(blk):
+        if "Corked: yes" in blk:
+            continue
+        if meters is not None and (title := is_level_meter(blk)):
+            meters.append(title)
             continue
         m = re.search(r'application.name = "([^"]+)"', blk)
-        src = re.search(r"Source: (\d+)", blk)
         apps.append(m.group(1) if m else "unknown app")
     return apps
 
@@ -137,7 +155,10 @@ class HostDetector:
         cam = fd_users(["/dev/video*"])
         for dev, who in cam.items():
             problems.append(f"{dev} in use by {', '.join(sorted(who))}")
-        rec = audio_recorders()
+        meters = []
+        rec = audio_recorders(meters)
+        for title in sorted(set(meters)):
+            eng.emit("host", "info", "mic_meter", title, f"{title} has the microphone open to draw an input level bar (Sound settings). Not a recording; close the window to stop it.", cooldown=3600)
         if rec is None:  # no pactl: fall back to raw device check, ignoring the audio server itself
             for dev, who in fd_users(["/dev/snd/pcmC*D*c"]).items():
                 who = {w for w in who if not w.startswith(("pipewire", "wireplumber", "pulseaudio"))}

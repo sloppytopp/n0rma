@@ -29,12 +29,19 @@ if __name__ == "__main__":
 
 class SettingsLevelMeterTest(unittest.TestCase):
     BLK = '\n\t\tapplication.name = "cinnamon"\n\t\tapplication.process.id = "42"\n\t\tmedia.name = "Peak detect"\n\t\tstream.monitor = "true"\n'
+    REAL = staticmethod(lambda pid: ("cinnamon-settings", "/usr/bin/python3.12"))
 
-    def test_real_settings_window_is_not_a_recording(self):
-        from n0rma.det_host import is_settings_level_meter
-        self.assertTrue(is_settings_level_meter(self.BLK, lambda pid: ("cinnamon-settings", "/usr/bin/python3.12")))
+    def test_real_settings_window_is_a_notice_not_an_alert(self):
+        from n0rma.det_host import is_level_meter
+        self.assertEqual(is_level_meter(self.BLK, self.REAL), "cinnamon-settings")
 
-    def test_same_labels_from_another_program_still_alert(self):
-        from n0rma.det_host import is_settings_level_meter
-        self.assertFalse(is_settings_level_meter(self.BLK, lambda pid: ("cinnamon-settings", "/tmp/evil")))
-        self.assertFalse(is_settings_level_meter(self.BLK.replace("Peak detect", "Capture"), lambda pid: ("cinnamon-settings", "/usr/bin/python3.12")))
+    def test_other_program_or_labels_stay_alerts(self):
+        from n0rma.det_host import is_level_meter
+        self.assertIsNone(is_level_meter(self.BLK, lambda pid: ("cinnamon-settings", "/tmp/evil")))
+        self.assertIsNone(is_level_meter(self.BLK, lambda pid: ("evil", "/usr/bin/python3.12")))
+        self.assertIsNone(is_level_meter(self.BLK.replace("Peak detect", "Capture"), self.REAL))
+
+    def test_duplicate_or_missing_properties_are_never_a_meter(self):
+        from n0rma.det_host import is_level_meter
+        self.assertIsNone(is_level_meter(self.BLK + '\t\tapplication.process.id = "99"\n', self.REAL))
+        self.assertIsNone(is_level_meter(self.BLK.replace('application.process.id = "42"', ''), self.REAL))
