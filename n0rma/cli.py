@@ -189,6 +189,11 @@ def cmd_sweep_report(a):
         print(text, end="")
 
 
+def cmd_spectrum(a):
+    from . import spectrum
+    spectrum.serve(port=a.port)
+
+
 def cmd_mic_sweep(a):
     from . import micsweep
     tools = micsweep.have_tools()
@@ -467,6 +472,9 @@ def main():
     ms.add_argument("--passes", type=int, default=5)
     ms.add_argument("--mode", default="fm", choices=["fm", "wbfm", "am"])
     ms.set_defaults(f=cmd_mic_sweep)
+    spc = sp.add_parser("spectrum", help="live RTL-SDR spectrum + waterfall in the browser")
+    spc.add_argument("--port", type=int, default=8780)
+    spc.set_defaults(f=cmd_spectrum)
     sp.add_parser("smart", help="smart-device privacy checklist and the DeFlock license-plate-camera map").set_defaults(f=cmd_smart)
     sp.add_parser("devices", help="LAN inventory").set_defaults(f=cmd_devices)
     t = sp.add_parser("trust", help="mark LAN device(s) as yours")

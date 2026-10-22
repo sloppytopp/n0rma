@@ -27,6 +27,7 @@ n0rma = "n0rma.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+spectrum = ["numpy"]
 
 [tool.setuptools]
 packages = ["n0rma"]
