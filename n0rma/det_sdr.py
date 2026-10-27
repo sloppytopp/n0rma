@@ -10,10 +10,13 @@ import time
 
 BANDS = [
     ("VHF handheld/FRS 136-174 MHz", 136e6, 174e6),
+    ("300-330 MHz (315 remotes, key fobs)", 300e6, 330e6),
     ("UHF 400-470 MHz (GMRS, bugs)", 400e6, 470e6),
     ("ISM 433 MHz (sensors, key fobs, bugs)", 430e6, 440e6),
+    ("800 MHz (public safety trunking, ESMR)", 806e6, 869e6),
     ("ISM 868 MHz (EU trackers/sensors)", 863e6, 870e6),
     ("ISM 915 MHz (US trackers/sensors/LoRa)", 902e6, 928e6),
+    ("928-1000 MHz (pagers, 960 aero band)", 928e6, 1000e6),
     ("1.2 GHz analog video / spy-cam TX", 1.08e9, 1.32e9),
 ]
 LEARN_SWEEPS = 12
