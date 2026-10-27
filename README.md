@@ -80,3 +80,6 @@ n0rma mic-sweep tone 433.920      # plays random tone patterns in the room; ALER
 How it avoids false alarms: fixed manual gain (stored with the baseline), a lower bar for recording baseline carriers than for flagging new ones, a fresh random on/off pattern each test with a shuffle test for chance, and control measurements (an empty nearby frequency and a nearby real carrier). If a control also "hears" the tone the result is *coupling*, never an alert. A confirmed tone means that frequency carries this room's audio (it could be your own baby monitor), not who put it there.
 
 A clean result does not prove a room is free of bugs: recorders that don't transmit, wired mics, GSM/LTE/DECT/digital or burst transmitters and anything above ~1.3 GHz are invisible to this.
+
+## Support
+n0rma is free, with no ads or tracking, and stays that way for every detection feature. If it helped you, you can [buy me a coffee](https://buymeacoffee.com/rhino). Starring the repo and telling someone who needs it helps just as much.
