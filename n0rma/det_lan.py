@@ -137,11 +137,14 @@ class LanDetector:
         with cf.ThreadPoolExecutor(32) as ex:
             ports = dict(zip(neigh, ex.map(probe_ports, neigh)))
         # A stored name only holds for the IP it was resolved at: IPs get reassigned, so re-resolve whenever it moved.
+        # A name stored for two devices is stale on at least one (the lookup is by IP, not MAC), so it is re-resolved here too.
+        dup = shared_names(known.values(), now)
         need = [ip for ip, mac in neigh.items()
-                if not (known.get(mac) or {}).get("hostname") or known[mac].get("name_ip") != ip]
+                if not (known.get(mac) or {}).get("hostname") or known[mac].get("name_ip") != ip
+                or known[mac]["hostname"].strip().lower() in dup]
         with cf.ThreadPoolExecutor(8) as ex:
             names = drop_ambiguous(dict(zip(need, ex.map(lookup_hostname, need))))
-        dup = shared_names(known.values(), now)
+        names = {ip: ("" if n.strip().lower() in dup else n) for ip, n in names.items()}   # the router still hands out the stale one
         cams, newcomers, inventory = [], [], []
         for ip, mac in neigh.items():
             ven = oui.vendor(mac)
