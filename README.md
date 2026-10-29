@@ -89,6 +89,8 @@ The browser dashboard opens in a calm grey/white theme: a plain-words status ban
 
 _Real captures from an RTL-SDR Blog V3: FM broadcast near 98.5 MHz, and the whole-spectrum overview map. The narrow spikes are strong stations plus local interference; band names are the usual allocations, not an identification._
 
+**Baseline compare:** after an overview scan, *Save as baseline* keeps it; scan again later and *Compare to baseline* lists only the carriers that appeared or went away by 8 dB or more. Both scans must use the same gain. It is a way to notice change, not to identify a signal.
+
 It shows signal strength by frequency. It cannot decode content and cannot tell you what a signal *is*: the band labels are the usual allocations, not an identification. A dongle covers about 24 MHz-1.7 GHz only (not 2.4/5.8 GHz). Rules about listening to some transmissions differ by country, so check yours.
 
 ## Hidden-mic sweep (RTL-SDR)
