@@ -386,7 +386,7 @@ function stopListen(){listening=null;fetch('/api/listen?mode=off');if(abortAudio
 $('listen').onclick=async()=>{if(listening){stopListen();return}const f=window._d?window._d.center:parseFloat($('freq').value);await startAudio();setListen(f)};
 $('vol').oninput=e=>{if(gainNode)gainNode.gain.value=parseFloat(e.target.value)};
 $('mode').onchange=()=>{if(listening)setListen(listening)};$('sq').onchange=()=>{if(listening)setListen(listening)};
-let st=null,bands=[],hold=false,peak=null,floorDb=-5,topDb=40,seq=-1;
+let st=null,bands=[],hold=false,peak=null,floorDb=-5,topDb=40,seq=-1,lastC=null;
 const spec=$('spec'),sx=spec.getContext('2d'),fall=$('fall'),fx=fall.getContext('2d'),ov=$('ov'),ox=ov.getContext('2d');
 function tune(f,g){let u='/api/tune?';if(f!=null)u+='f='+f+'&';if(g!=null)u+='g='+g;peak=null;fetch(u)}
 $('go').onclick=()=>{const f=parseFloat($('freq').value);tune(f);if(listening)setListen(f)};
@@ -411,7 +411,8 @@ function draw(d){const n=d.db.length,W=spec.width,H=spec.height;
  const y=v=>H-18-(v-floorDb)/(topDb-floorDb)*(H-34);
  if(hold){if(!peak)peak=[...d.db];peak=peak.map((p,i)=>Math.max(p,d.db[i]));sx.strokeStyle='#ffb454';sx.beginPath();peak.forEach((v,i)=>{const x=i/(n-1)*W;i?sx.lineTo(x,y(v)):sx.moveTo(x,y(v))});sx.stroke()}
  sx.strokeStyle='#35d0ba';sx.lineWidth=1.5;sx.beginPath();d.db.forEach((v,i)=>{const x=i/(n-1)*W;i?sx.lineTo(x,y(v)):sx.moveTo(x,y(v))});sx.stroke();sx.lineWidth=1;
- // waterfall
+ // waterfall (cleared when the centre frequency changes, so rows from another band never sit under the new one)
+ if(d.center!==lastC){fx.fillStyle='#05080c';fx.fillRect(0,0,W,fall.height);lastC=d.center}
  fx.drawImage(fall,0,0,W,fall.height-1,0,1,W,fall.height-1);
  const img=fx.createImageData(W,1);d.db.forEach((v,i)=>{const c=color(v).match(/\d+/g).map(Number);const x0=Math.floor(i/n*W),x1=Math.floor((i+1)/n*W);for(let x=x0;x<Math.max(x1,x0+1);x++){const o=x*4;img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255}});
  fx.putImageData(img,0,0);
