@@ -6,6 +6,7 @@ signal IS: the band labels are the usual allocations, not an identification.
 """
 import json
 import math
+import os
 import queue
 import shutil
 import subprocess
@@ -31,11 +32,60 @@ BANDS = [
     (869.0, 894.0, "Cell 850 downlink"), (902.0, 928.0, "ISM 915 (meters, remotes)"),
     (929.0, 932.0, "Pagers"), (1090.0, 1090.0, "ADS-B aircraft"),
     (1575.4, 1575.4, "GPS L1"),
+    (225.0, 400.0, "Federal / military UHF air"), (806.0, 869.0, "800 MHz public safety / trunking"),
+    (960.0, 1215.0, "Aviation (DME / TACAN)"),
 ]
 
 
 def have_tools():
     return bool(shutil.which("rtl_sdr") and shutil.which("rtl_power"))
+
+
+BASELINE_MAX_GAIN_DIFF = 1.0     # dB: scans made at different gains are not comparable
+RISE_DB = 8.0                    # a carrier must be this much stronger (or weaker) than in the baseline to be reported
+MERGE_MHZ = 0.6                  # points this close are one carrier
+
+
+def save_baseline(path, overview, t):
+    """Keep an overview scan (frequencies, levels, the gain it was taken at) to compare later scans against."""
+    with open(path, "w") as f:
+        json.dump({"t": int(t), "gain": overview.get("gain"), "f": overview["f"], "db": overview["db"]}, f)
+
+
+def load_baseline(path):
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        return d if d.get("f") and d.get("db") and len(d["f"]) == len(d["db"]) else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def compare_overview(base, new, rise=RISE_DB):
+    """What changed between two overview scans: carriers that are new (>= rise dB stronger) and ones that went away (>= rise dB weaker).
+
+    Both scans must have been made at about the same gain. Reports usual-allocation names only; it cannot say what a signal is."""
+    if not base or not base.get("f"):
+        return {"ok": False, "error": "No baseline saved yet. Scan, then press Save as baseline.", "new": [], "gone": []}
+    if not new or not new.get("f"):
+        return {"ok": False, "error": "No overview scan to compare. Press Scan first.", "new": [], "gone": []}
+    bg, ng = base.get("gain"), new.get("gain")
+    if bg is not None and ng is not None and abs(bg - ng) > BASELINE_MAX_GAIN_DIFF:
+        return {"ok": False, "error": f"The baseline was taken at gain {bg:.1f} dB and this scan at {ng:.1f} dB. Set the same gain and scan again.",
+                "new": [], "gone": []}
+    bmap = {round(f, 3): v for f, v in zip(base["f"], base["db"])}
+    pts = [(f, v - bmap[round(f, 3)], v) for f, v in zip(new["f"], new["db"]) if round(f, 3) in bmap]
+
+    def peaks(sign):
+        cand = [(sign * d, f, v) for f, d, v in pts if sign * d >= rise]
+        cand.sort(reverse=True)
+        out = []
+        for d, f, v in cand:
+            if all(abs(f - o["f"]) > MERGE_MHZ for o in out):
+                out.append({"f": f, "rise": round(d, 1), "db": round(v, 1), "label": label_for(f)})
+        return sorted(out, key=lambda o: o["f"])
+
+    return {"ok": True, "error": "", "new": peaks(1), "gone": peaks(-1)}
 
 
 def label_for(mhz):
@@ -245,7 +295,7 @@ class Radio:
                 pts += [(lo + i * step, float(v)) for i, v in enumerate(p[6:])]
             pts.sort()
             self.overview = {"t": int(time.time()), "f": [round(a / 1e6, 3) for a, _ in pts],
-                             "db": [round(b, 1) for _, b in pts]}
+                             "db": [round(b, 1) for _, b in pts], "gain": self.gain}
         except Exception as e:
             self.error = f"Overview failed: {e}"
         finally:
@@ -321,6 +371,20 @@ def serve(host="127.0.0.1", port=8780):
                                               "listen": radio.listen and [radio.listen[0], radio.listen[1] / 1e6]}))
             if path == "/api/overview":
                 return self._send(json.dumps({"busy": radio.ov_busy, "data": radio.overview, "bands": BANDS}))
+            if path in ("/api/overview/baseline", "/api/overview/compare"):
+                from .core import DATA_DIR
+                bp = os.path.join(DATA_DIR, "spectrum_baseline.json")
+                ov = radio.overview
+                if path.endswith("baseline"):
+                    if not ov or not ov.get("f"):
+                        return self._send(json.dumps({"ok": False, "error": "Run a scan first."}))
+                    os.makedirs(DATA_DIR, exist_ok=True)
+                    save_baseline(bp, ov, ov["t"])
+                    return self._send(json.dumps({"ok": True, "t": ov["t"]}))
+                base = load_baseline(bp)
+                r = compare_overview(base, ov)
+                r["base_t"] = base and base.get("t")
+                return self._send(json.dumps(r))
             if path == "/api/overview/run":
                 radio.run_overview()
                 return self._send('{"ok":true}')
@@ -359,7 +423,9 @@ button{cursor:pointer}button:hover,button.on{border-color:var(--acc);color:var(-
 <div class="row"><span id="cur">Hover the graph…</span><span>Click anywhere to tune there. Bright = stronger signal.</span></div>
 <div class="card"><b>Strongest signals right now</b> <small>(labels are the usual allocation for that frequency, not an identification)</small><div id="peaks"></div></div>
 <div class="card"><b>Whole-spectrum overview</b> <small id="ovs">Press “Scan” – takes about a minute and pauses the live view.</small>
-<canvas id="ov" width="1400" height="200"></canvas></div>
+<canvas id="ov" width="1400" height="200"></canvas>
+<div style="margin-top:6px"><button id="obase">Save as baseline</button> <button id="ocmp">Compare to baseline</button> <small id="ocs">Save a scan when everything looks normal, scan again later, and compare: only carriers that appeared or went away are listed.</small></div>
+<div id="ocl"></div></div>
 </main>
 <script>
 const $=id=>document.getElementById(id);
@@ -431,7 +497,7 @@ async function loop(){try{const d=await (await fetch('/api/frame')).json();bands
  setTimeout(loop,90)}
 async function pollOv(){const o=await (await fetch('/api/overview')).json();
  if(o.busy){$('ovs').textContent='Scanning… (about a minute)';return setTimeout(pollOv,2000)}
- if(!o.data)return;const f=o.data.f,db=o.data.db,W=ov.width,H=ov.height;
+ if(!o.data||!o.data.f.length)return;const f=o.data.f,db=o.data.db,W=ov.width,H=ov.height;
  const s=[...db].sort((a,b)=>a-b),lo=s[0]-2,hi=s[s.length-1]+2;ox.fillStyle='#05080c';ox.fillRect(0,0,W,H);
  const f0=24,f1=1766,X=v=>(v-f0)/(f1-f0)*W,Y=v=>H-14-(v-lo)/(hi-lo)*(H-26);
  ox.font='11px system-ui';o.bands.forEach(b=>{if(b[1]-b[0]<.5)return;ox.fillStyle='rgba(53,208,186,.12)';ox.fillRect(X(b[0]),0,Math.max(2,X(b[1])-X(b[0])),H)});
@@ -439,5 +505,11 @@ async function pollOv(){const o=await (await fetch('/api/overview')).json();
  ox.fillStyle='#7d8fa3';for(let m=100;m<=1700;m+=200)ox.fillText(m+' MHz',X(m)+2,H-2);
  $('ovs').textContent='Click the map to jump the live view there. Scanned '+new Date(o.data.t*1000).toLocaleTimeString()+'.';
  ov.onclick=e=>{const r=ov.getBoundingClientRect(),m=f0+(e.clientX-r.left)/r.width*(f1-f0);$('freq').value=m.toFixed(3);tune(m);scrollTo(0,0)}}
+$('obase').onclick=async()=>{const r=await (await fetch('/api/overview/baseline')).json();$('ocs').textContent=r.ok?'Baseline saved from the scan at '+new Date(r.t*1000).toLocaleString()+'.':r.error};
+$('ocmp').onclick=async()=>{const r=await (await fetch('/api/overview/compare')).json(),L=$('ocl');
+ if(!r.ok){$('ocs').textContent=r.error;L.textContent='';return}
+ $('ocs').textContent='Compared with the baseline from '+new Date(r.base_t*1000).toLocaleString()+' (labels are usual allocations, not identifications).';
+ const row=(x,w)=>'<span><b>'+x.f.toFixed(3)+' MHz</b> '+(w?'gone, ':'new, ')+x.rise.toFixed(0)+' dB '+(w?'weaker':'stronger')+(x.label?' · '+x.label:'')+'</span>';
+ L.innerHTML=(r.new.length||r.gone.length)?r.new.map(x=>row(x,0)).concat(r.gone.map(x=>row(x,1))).join(''):'<small>No carrier appeared or disappeared.</small>'};
 loop();pollOv();
 </script></body></html>"""
