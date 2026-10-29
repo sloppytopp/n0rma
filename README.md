@@ -6,6 +6,17 @@ Run: `./n0rma.sh setup` once, then `./n0rma.sh run` -> http://127.0.0.1:8777
 
 ![dashboard with made-up demo data](https://raw.githubusercontent.com/sloppytopp/n0rma/main/docs/screenshot.png)
 
+## New since 0.5 (on `main`, not yet released)
+- **Radar tab:** separate Bluetooth and Wi-Fi scopes (distance only - the angle of a dot means nothing, because signal strength gives no direction) with plain-language result cards: Find it / This is mine / Details.
+- **Presence log** (History tab, `/api/presence`): when each hidden or private-address Wi-Fi source appeared and disappeared, and how well the scans covered the time.
+- **Dashboard layouts:** calm grey/white by default, plus Executive (one headline, three open items), Night vision and Classic.
+- **Spectrum viewer** (`n0rma spectrum`, RTL-SDR): live spectrum and waterfall in the browser - see "Spectrum viewer" below.
+- **RF watch** now also covers 300-330 MHz (315 MHz remotes), 806-869 MHz (public-safety trunking) and 928-1000 MHz (pagers, aero).
+- **LAN:** device names are tied to the IP they were resolved at, shown only when one device carries the name, and the table shows whether a device actually replied instead of trusting the neighbour cache.
+- **Host:** the mic level meter is always a visible notice while a stream is open, and Sound settings' meter is not treated as a recording.
+- Rename finished: data folder, header and cookie are now `n0rma`.
+- A **Buy me a coffee** link, if N0RMA helped.
+
 ## What's new in 0.5
 - **Smart tab** on the dashboard: nearby gadgets grouped by maker (Amazon, Google, Samsung, cameras, plugs) from their network and Bluetooth names, a privacy checklist (Amazon Sidewalk, Ring/Alexa accounts, microphones, router), and a link that opens the community **DeFlock** license-plate-camera map (`maps.deflock.org`) in your browser. `n0rma smart` prints the same checklist. Names are hints, not proof.
 - **Physical inspection:** `n0rma inspect <room>` is a tick-off checklist (ceiling fittings, outlets, objects facing the bed, lens-glint and infrared checks, mirrors, router device list; bedroom/bathroom/rental extras and a car list). Most real finds are physical.
@@ -41,6 +52,9 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
 | `find <BLE addr>` | hot/cold locator |
 | `inspect <room> [--tick id ...]` | physical-inspection checklist for a room |
 | `sweep-report [-o file]` | TSCM-style report (what was and was NOT checked + everything flagged) |
+| `mic-sweep baseline\|scan\|tone <MHz>` | hunt for a hidden microphone's transmitter with an RTL-SDR (see below) |
+| `spectrum [--port N]` | live RTL-SDR spectrum + waterfall in the browser (default port 8780) |
+| `evidence [-o file]` | tamper-evident report of everything flagged, for police or an advocate |
 | `smart` | smart-device privacy checklist and the DeFlock map link |
 | `home <lat> <lon>` | home position for the drone map (west longitude is negative) |
 | `ntfy setup\|test\|on\|off` | phone alerts (generic text only, via ntfy.sh) |
@@ -66,6 +80,11 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
 The browser dashboard opens in a calm grey/white theme: a plain-words status banner, three cards (active scans, unresolved items, evidence), an Info / Suspect / Alert event timeline where each flagged event can be marked resolved (own device, false alarm), quick actions (export evidence, rebaseline, settings, safety checklist) and the tamper-evident evidence export. Pick **Night vision** (dim red on black), **Executive** (a streamlined slate look: one headline, the three items that need a decision, a few links) or **Classic** (the original DEFCON / Matrix look) from the menu at the top right, or open `/?theme=classic`.
 
 **Rebaseline** (dashboard button, or `n0rma rebaseline` for the host part): once everything looks normal, lock in the network devices, listening ports and USB devices seen right now. Anything new after that is flagged. Camera-like devices are never locked in automatically: a camera on the network right now may be the thing you are looking for, so it stays flagged until you decide about it.
+
+## Spectrum viewer (RTL-SDR)
+`n0rma spectrum` serves a local page (default http://127.0.0.1:8780) with a live spectrum and waterfall, click-to-tune, band labels, a peak list, a one-shot 24 MHz-1.7 GHz overview map, and in-browser listening (wideband FM, narrow FM, AM). It needs an RTL-SDR dongle, `sudo apt install rtl-sdr`, and numpy: `pip install "n0rma-sec[spectrum]"`.
+
+It shows signal strength by frequency. It cannot decode content and cannot tell you what a signal *is*: the band labels are the usual allocations, not an identification. A dongle covers about 24 MHz-1.7 GHz only (not 2.4/5.8 GHz). Rules about listening to some transmissions differ by country, so check yours.
 
 ## Hidden-mic sweep (RTL-SDR)
 
