@@ -84,6 +84,11 @@ The browser dashboard opens in a calm grey/white theme: a plain-words status ban
 ## Spectrum viewer (RTL-SDR)
 `n0rma spectrum` serves a local page (default http://127.0.0.1:8780) with a live spectrum and waterfall, click-to-tune, band labels, a peak list, a one-shot 24 MHz-1.7 GHz overview map, and in-browser listening (wideband FM, narrow FM, AM). It needs an RTL-SDR dongle, `sudo apt install rtl-sdr`, and numpy: `pip install "n0rma-sec[spectrum]"`.
 
+<img src="https://raw.githubusercontent.com/sloppytopp/n0rma/main/docs/spectrum.png" alt="Live spectrum and waterfall around 98.5 MHz on an RTL-SDR Blog V3, with the strongest signals listed">
+<img src="https://raw.githubusercontent.com/sloppytopp/n0rma/main/docs/spectrum_overview.png" alt="The 24 MHz-1.7 GHz overview map next to the live view">
+
+_Real captures from an RTL-SDR Blog V3: FM broadcast near 98.5 MHz, and the whole-spectrum overview map. The narrow spikes are strong stations plus local interference; band names are the usual allocations, not an identification._
+
 It shows signal strength by frequency. It cannot decode content and cannot tell you what a signal *is*: the band labels are the usual allocations, not an identification. A dongle covers about 24 MHz-1.7 GHz only (not 2.4/5.8 GHz). Rules about listening to some transmissions differ by country, so check yours.
 
 ## Hidden-mic sweep (RTL-SDR)
