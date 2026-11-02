@@ -50,6 +50,13 @@ def learning_done(hist, dead=frozenset()):
     return all(len(h) >= LEARN_SWEEPS for n, h in hist.items() if n not in dead)
 
 
+def baseline_for(h, learned):
+    """Mean peak of this band's own history, or None while the band (or the global gate) is not ready."""
+    if not learned or len(h) < LEARN_SWEEPS:
+        return None
+    return statistics.mean(x[0] for x in h)
+
+
 def note_sweep(fails, name, ok):
     fails[name] = 0 if ok else fails.get(name, 0) + 1
 
@@ -73,6 +80,12 @@ class SdrDetector:
         self.eng = eng
         self.hist = {b[0]: [] for b in BANDS}
         self.fails = {}
+        self.armed = False   # latches once every working band has learned; later a band that relearns cannot close it again
+
+    def is_armed(self):
+        if not self.armed and learning_done(self.hist, dead_bands(self.fails)):
+            self.armed = True
+        return self.armed
 
     def start(self):
         import threading
@@ -82,36 +95,42 @@ class SdrDetector:
         threading.Thread(target=self._loop, daemon=True, name="sdr").start()
         return True
 
+    def _sweep_band(self, name, lo, hi, learned, hot):
+        try:
+            r = subprocess.run(["rtl_power", "-f", f"{int(lo)}:{int(hi)}:25k", "-i", "4", "-1", "-"],
+                               capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            note_sweep(self.fails, name, ok=False)
+            return
+        res = parse_rtl_power(r.stdout)
+        note_sweep(self.fails, name, ok=bool(res))
+        if not res:
+            self.eng.status("rf", "watch", f"rtl_power returned no data: {r.stderr.strip()[:80]}")
+            return
+        peak, hz, floor = res
+        h = self.hist[name]
+        base = baseline_for(h, learned)
+        if base is not None and peak > base + JUMP_DB:
+            hot.append((name, hz, peak, base))
+            self.eng.emit("rf", "alert", "rf_spike", name,
+                          f"RF carrier in {name}: {hz/1e6:.3f} MHz at {peak:.0f} dB "
+                          f"(baseline {base:.0f} dB)", {"hz": hz, "peak": peak, "base": base}, 600)
+        h.append((peak, hz, floor))
+        del h[:-200]
+        self.eng.live.setdefault("rf", {})[name] = {"peak_db": round(peak, 1), "mhz": round(hz / 1e6, 3),
+                                                     "floor_db": round(floor, 1), "samples": len(h)}
+
     def _loop(self):
         while not self.eng.stop.is_set():
             hot = []
-            dead = dead_bands(self.fails)
-            learned = learning_done(self.hist, dead)   # decided once per cycle: every working band must have a full baseline
+            learned = self.is_armed()   # decided once per cycle
             for name, lo, hi in BANDS:
                 try:
-                    r = subprocess.run(["rtl_power", "-f", f"{int(lo)}:{int(hi)}:25k", "-i", "4", "-1", "-"],
-                                       capture_output=True, text=True, timeout=60)
-                except subprocess.TimeoutExpired:
+                    self._sweep_band(name, lo, hi, learned, hot)
+                except Exception as e:   # one bad band must not kill the RF thread
                     note_sweep(self.fails, name, ok=False)
-                    continue
-                res = parse_rtl_power(r.stdout)
-                note_sweep(self.fails, name, ok=bool(res))
-                if not res:
-                    self.eng.status("rf", "watch", f"rtl_power returned no data: {r.stderr.strip()[:80]}")
-                    continue
-                peak, hz, floor = res
-                h = self.hist[name]
-                if learned:
-                    base = statistics.mean(x[0] for x in h)
-                    if peak > base + JUMP_DB:
-                        hot.append((name, hz, peak, base))
-                        self.eng.emit("rf", "alert", "rf_spike", name,
-                                      f"RF carrier in {name}: {hz/1e6:.3f} MHz at {peak:.0f} dB "
-                                      f"(baseline {base:.0f} dB)", {"hz": hz, "peak": peak, "base": base}, 600)
-                h.append((peak, hz, floor))
-                del h[:-200]
-                self.eng.live.setdefault("rf", {})[name] = {"peak_db": round(peak, 1), "mhz": round(hz / 1e6, 3),
-                                                             "floor_db": round(floor, 1), "samples": len(h)}
+                    self.eng.status("rf", "watch", f"RF degraded: {name}: {type(e).__name__}")
+            dead = dead_bands(self.fails)
             if hot:
                 n, hz, p, b = hot[0]
                 self.eng.status("rf", "alert", f"RF jump in {n}: {hz/1e6:.3f} MHz, +{p-b:.0f} dB over baseline")

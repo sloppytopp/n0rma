@@ -25,3 +25,22 @@ def test_band_is_dead_after_consecutive_failures_and_recovers():
     assert det_sdr.dead_bands(fails) == {"b"}
     det_sdr.note_sweep(fails, "b", ok=True)
     assert det_sdr.dead_bands(fails) == set()
+
+
+def test_baseline_needs_a_full_history_for_that_band():
+    full = [(5.0, 1.0, 0.0)] * det_sdr.LEARN_SWEEPS
+    assert det_sdr.baseline_for([], learned=True) is None           # recovered dead band: no history yet
+    assert det_sdr.baseline_for(full[:-1], learned=True) is None    # half-learned
+    assert det_sdr.baseline_for(full, learned=False) is None        # global gate still closed
+    assert det_sdr.baseline_for(full, learned=True) == 5.0
+
+
+def test_gate_latches_open_so_a_flapping_band_cannot_close_it_again():
+    full = [(0.0, 1.0, 0.0)] * det_sdr.LEARN_SWEEPS
+    d = det_sdr.SdrDetector(eng=None)
+    assert not d.is_armed()
+    for h in d.hist.values():
+        h.extend(full)
+    assert d.is_armed()
+    d.hist[det_sdr.BANDS[0][0]].clear()   # one band later drops out and has to relearn
+    assert d.is_armed()
