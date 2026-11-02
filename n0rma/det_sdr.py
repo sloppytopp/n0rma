@@ -44,6 +44,11 @@ def parse_rtl_power(text):
     return peak, peak_hz, statistics.median(vals)
 
 
+def learning_done(hist):
+    """True once every band has a full baseline; no band may alert on a half-learned baseline."""
+    return all(len(h) >= LEARN_SWEEPS for h in hist.values())
+
+
 def dongle_present():
     if not shutil.which("rtl_power"):
         return False
@@ -70,6 +75,7 @@ class SdrDetector:
     def _loop(self):
         while not self.eng.stop.is_set():
             hot = []
+            learned = learning_done(self.hist)   # decided once per cycle: baseline must be complete for ALL bands
             for name, lo, hi in BANDS:
                 try:
                     r = subprocess.run(["rtl_power", "-f", f"{int(lo)}:{int(hi)}:25k", "-i", "4", "-1", "-"],
@@ -82,7 +88,7 @@ class SdrDetector:
                     continue
                 peak, hz, floor = res
                 h = self.hist[name]
-                if len(h) >= LEARN_SWEEPS:
+                if learned:
                     base = statistics.mean(x[0] for x in h)
                     if peak > base + JUMP_DB:
                         hot.append((name, hz, peak, base))
@@ -96,7 +102,7 @@ class SdrDetector:
             if hot:
                 n, hz, p, b = hot[0]
                 self.eng.status("rf", "alert", f"RF jump in {n}: {hz/1e6:.3f} MHz, +{p-b:.0f} dB over baseline")
-            elif all(len(h) < LEARN_SWEEPS for h in self.hist.values()):
+            elif not learned:
                 self.eng.status("rf", "watch", "RF baseline learning (leave running ~10 min)")
             else:
                 self.eng.status("rf", "ok", "RF levels within baseline in all watched bands")
