@@ -47,7 +47,17 @@ def parse_rtl_power(text):
 
 def learning_done(hist, dead=frozenset()):
     """True once every working band has a full baseline; a band that returns no data (dead) cannot hold the others back."""
-    return all(len(h) >= LEARN_SWEEPS for n, h in hist.items() if n not in dead)
+    live = [h for n, h in hist.items() if n not in dead]
+    return bool(live) and all(len(h) >= LEARN_SWEEPS for h in live)   # all bands dead is never "learned"
+
+
+def rf_summary(hist, dead):
+    """Status when no band is currently alerting. 'ok' only while every working band has a full baseline."""
+    if dead:
+        return "watch", "RF degraded: no data from " + ", ".join(sorted(dead))
+    if not learning_done(hist, dead):
+        return "watch", "RF baseline learning (leave running ~10 min)"
+    return "ok", "RF levels within baseline in all watched bands"
 
 
 def baseline_for(h, learned):
@@ -134,10 +144,6 @@ class SdrDetector:
             if hot:
                 n, hz, p, b = hot[0]
                 self.eng.status("rf", "alert", f"RF jump in {n}: {hz/1e6:.3f} MHz, +{p-b:.0f} dB over baseline")
-            elif dead:
-                self.eng.status("rf", "watch", "RF degraded: no data from " + ", ".join(sorted(dead)))
-            elif not learned:
-                self.eng.status("rf", "watch", "RF baseline learning (leave running ~10 min)")
             else:
-                self.eng.status("rf", "ok", "RF levels within baseline in all watched bands")
+                self.eng.status("rf", *rf_summary(self.hist, dead))
         return

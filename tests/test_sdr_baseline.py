@@ -44,3 +44,20 @@ def test_gate_latches_open_so_a_flapping_band_cannot_close_it_again():
     assert d.is_armed()
     d.hist[det_sdr.BANDS[0][0]].clear()   # one band later drops out and has to relearn
     assert d.is_armed()
+
+
+def test_all_bands_dead_is_not_learned_and_status_is_degraded():
+    hist = {b[0]: [] for b in det_sdr.BANDS}
+    dead = {b[0] for b in det_sdr.BANDS}
+    assert not det_sdr.learning_done(hist, dead)
+    level, msg = det_sdr.rf_summary(hist, dead)
+    assert level == "watch" and "degraded" in msg
+
+
+def test_status_is_never_ok_while_a_live_band_has_no_baseline():
+    full = [(0.0, 1.0, 0.0)] * det_sdr.LEARN_SWEEPS
+    hist = {b[0]: list(full) for b in det_sdr.BANDS}
+    assert det_sdr.rf_summary(hist, set())[0] == "ok"
+    hist[det_sdr.BANDS[0][0]] = []   # a recovered band relearning
+    level, msg = det_sdr.rf_summary(hist, set())
+    assert level == "watch" and "learning" in msg
