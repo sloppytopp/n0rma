@@ -21,6 +21,7 @@ BANDS = [
 ]
 LEARN_SWEEPS = 12
 JUMP_DB = 12.0
+FAIL_LIMIT = 3   # consecutive empty sweeps before a band is treated as unavailable
 
 
 def parse_rtl_power(text):
@@ -44,9 +45,17 @@ def parse_rtl_power(text):
     return peak, peak_hz, statistics.median(vals)
 
 
-def learning_done(hist):
-    """True once every band has a full baseline; no band may alert on a half-learned baseline."""
-    return all(len(h) >= LEARN_SWEEPS for h in hist.values())
+def learning_done(hist, dead=frozenset()):
+    """True once every working band has a full baseline; a band that returns no data (dead) cannot hold the others back."""
+    return all(len(h) >= LEARN_SWEEPS for n, h in hist.items() if n not in dead)
+
+
+def note_sweep(fails, name, ok):
+    fails[name] = 0 if ok else fails.get(name, 0) + 1
+
+
+def dead_bands(fails):
+    return {n for n, c in fails.items() if c >= FAIL_LIMIT}
 
 
 def dongle_present():
@@ -63,6 +72,7 @@ class SdrDetector:
     def __init__(self, eng):
         self.eng = eng
         self.hist = {b[0]: [] for b in BANDS}
+        self.fails = {}
 
     def start(self):
         import threading
@@ -75,14 +85,17 @@ class SdrDetector:
     def _loop(self):
         while not self.eng.stop.is_set():
             hot = []
-            learned = learning_done(self.hist)   # decided once per cycle: baseline must be complete for ALL bands
+            dead = dead_bands(self.fails)
+            learned = learning_done(self.hist, dead)   # decided once per cycle: every working band must have a full baseline
             for name, lo, hi in BANDS:
                 try:
                     r = subprocess.run(["rtl_power", "-f", f"{int(lo)}:{int(hi)}:25k", "-i", "4", "-1", "-"],
                                        capture_output=True, text=True, timeout=60)
                 except subprocess.TimeoutExpired:
+                    note_sweep(self.fails, name, ok=False)
                     continue
                 res = parse_rtl_power(r.stdout)
+                note_sweep(self.fails, name, ok=bool(res))
                 if not res:
                     self.eng.status("rf", "watch", f"rtl_power returned no data: {r.stderr.strip()[:80]}")
                     continue
@@ -102,6 +115,8 @@ class SdrDetector:
             if hot:
                 n, hz, p, b = hot[0]
                 self.eng.status("rf", "alert", f"RF jump in {n}: {hz/1e6:.3f} MHz, +{p-b:.0f} dB over baseline")
+            elif dead:
+                self.eng.status("rf", "watch", "RF degraded: no data from " + ", ".join(sorted(dead)))
             elif not learned:
                 self.eng.status("rf", "watch", "RF baseline learning (leave running ~10 min)")
             else:
