@@ -61,3 +61,15 @@ def test_status_is_never_ok_while_a_live_band_has_no_baseline():
     hist[det_sdr.BANDS[0][0]] = []   # a recovered band relearning
     level, msg = det_sdr.rf_summary(hist, set())
     assert level == "watch" and "learning" in msg
+
+
+def test_status_reads_learning_never_ok_during_the_learning_window():
+    hist = {b[0]: [] for b in det_sdr.BANDS}
+    for sweeps in range(0, det_sdr.LEARN_SWEEPS):   # sweep 0 .. 11: still learning
+        for h in hist.values():
+            h[:] = [(0.0, 1.0, 0.0)] * sweeps
+        level, msg = det_sdr.rf_summary(hist, set())
+        assert (level, "learning" in msg) == ("watch", True), sweeps
+    for h in hist.values():
+        h[:] = [(0.0, 1.0, 0.0)] * det_sdr.LEARN_SWEEPS
+    assert det_sdr.rf_summary(hist, set())[0] == "ok"

@@ -11,7 +11,7 @@ Run: `./n0rma.sh setup` once, then `./n0rma.sh run` -> http://127.0.0.1:8777
 - **Presence log** (History tab, `/api/presence`): when each hidden or private-address Wi-Fi source appeared and disappeared, and how well the scans covered the time.
 - **Dashboard layouts:** calm grey/white by default, plus Executive (one headline, three open items), Night vision and Classic.
 - **Spectrum viewer** (`n0rma spectrum`, RTL-SDR): live spectrum and waterfall in the browser - see "Spectrum viewer" below.
-- **RF watch** now also covers 300-330 MHz (315 MHz remotes), 806-869 MHz (public-safety trunking) and 928-1000 MHz (pagers, aero).
+- **RF watch** now also covers 300-330 MHz (315 MHz remotes), 806-869 MHz (public-safety trunking) and 928-1000 MHz (pagers, aero). RF alerts stay off for roughly the first 10 minutes after start while N0RMA learns each band's baseline; the status reads "RF baseline learning" until then and only says "ok" once every working band has one.
 - **LAN:** device names are tied to the IP they were resolved at, shown only when one device carries the name, and the table shows whether a device actually replied instead of trusting the neighbour cache.
 - **Host:** the mic level meter is always a visible notice while a stream is open, and Sound settings' meter is not treated as a recording.
 - Rename finished: data folder, header and cookie are now `n0rma`.
