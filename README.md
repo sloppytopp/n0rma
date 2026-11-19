@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/n0rma-banner.png" alt="N0rma" width="100%"></p>
+
 # N0RMA
 
 
