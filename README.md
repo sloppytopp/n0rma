@@ -1,5 +1,3 @@
-<p align="center"><img src="docs/images/hero-banner.png" alt="N0rma: a quiet lookout for any place you need to trust" width="100%"></p>
-
 # N0RMA
 
 
@@ -111,6 +109,3 @@ A clean result does not prove a room is free of bugs: recorders that don't trans
 
 ## Support
 n0rma is free, with no ads or tracking, and stays that way for every detection feature. If it helped you, you can [buy me a coffee](https://buymeacoffee.com/rhino). Starring the repo and telling someone who needs it helps just as much.
-
----
-Banner photo: [&ldquo;Eastern Light&rdquo;](https://commons.wikimedia.org/wiki/File:Eastern_Light.jpg) by Dureall (2008), via Wikimedia Commons, licensed [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Cropped and darkened; the banner image `docs/images/hero-banner.png` is shared under the same licence. The rest of this repository is under its own licence.
