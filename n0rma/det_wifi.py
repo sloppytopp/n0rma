@@ -4,7 +4,7 @@ import subprocess
 import time
 from collections import deque
 
-from . import oui, presence, remoteid
+from . import oui, presence, remoteid, ridtrust
 
 DRONE_SSID = re.compile(r"^(DJI|TELLO|MAVIC|PHANTOM|SPARK|MAVIC|PARROT|ANAFI|BEBOP|SKYDIO|AUTEL|HOLYSTONE|"
                         r"POTENSIC|HUBSAN|FIMI|YUNEEC|RYZE|SYMA|WLT|RC-?UFO|DRONE|FPV)[-_ ]?", re.I)
@@ -166,7 +166,8 @@ class WifiDetector:
             b["vendor"], b["klass"] = ven, klass
             if b["rid_ies"]:
                 for ie in b["rid_ies"]:
-                    info = remoteid.from_wifi_vendor_ie(ie)
+                    info = {**remoteid.from_wifi_vendor_ie(ie),
+                            **ridtrust.judge_wifi_ie(ie, b["bssid"], b["signal"], time.time())}
                     drone_hits.append((b, "Remote ID beacon (Wi-Fi)", info))
             elif klass == "drone" or DRONE_SSID.search(b["ssid"]):
                 drone_hits.append((b, f"drone-like network ({ven})", {}))
@@ -185,7 +186,8 @@ class WifiDetector:
             loc = f" pos={info['lat']:.5f},{info['lon']:.5f}" if info.get("lat") else ""
             op = f" operator={info['operator_lat']:.5f},{info['operator_lon']:.5f}" if info.get("operator_lat") else ""
             ident = f" id={info['basic_id']}" if info.get("basic_id") else ""
-            base = f"Broadcast CLAIMS a drone: {why} (unverified) ssid='{b['ssid']}' {b['bssid']} {b['signal']:.0f} dBm{ident}{loc}"
+            tag = ridtrust.describe(info, "Wi-Fi") if info.get("trust") else "(unverified)"
+            base = f"Broadcast CLAIMS a drone: {why} {tag} ssid='{b['ssid']}' {b['bssid']} {b['signal']:.0f} dBm{ident}{loc}"
             eng.status("drone", "alert", base + op, "wifi")  # live only
             safe = {k: v for k, v in info.items() if not k.startswith("operator")}
             eng.emit("drone", "alert", "wifi_drone", b["bssid"], base, {**b, **safe}, 120)  # operator position NOT stored

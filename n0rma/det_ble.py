@@ -3,7 +3,7 @@ import asyncio
 import time
 from collections import deque
 
-from . import remoteid, spam
+from . import remoteid, ridtrust, spam
 
 BASE = "-0000-1000-8000-00805f9b34fb"
 TRACKER_UUIDS = {
@@ -89,6 +89,9 @@ class BLEDetector:
         s.setdefault("hist", deque(maxlen=120)).append(adv.rssi)
         s["n"] += 1
         s["rssi_max"] = max(s["rssi_max"], adv.rssi)
+        if kind == "drone":    # verdict from this transmitter's history (optional remoteid package)
+            sd = {short_uuid(k): v for k, v in (adv.service_data or {}).items()}
+            extra = {**extra, **ridtrust.judge(sd.get(REMOTE_ID_UUID), "ble_service_data", device.address, adv.rssi, now)}
         if extra:
             s["extra"].update(extra)
 
@@ -154,7 +157,7 @@ class BLEDetector:
             addr, s = drones[0]
             e = s["extra"]
             where = f" at {e['lat']:.5f},{e['lon']:.5f}" if e.get("lat") else ""
-            base = f"Remote ID broadcast CLAIMS a drone (Bluetooth; unverified) id={e.get('basic_id','?')} rssi={s['rssi']}{where}"
+            base = f"Remote ID broadcast CLAIMS a drone {ridtrust.describe(e, 'Bluetooth')} id={e.get('basic_id','?')} rssi={s['rssi']}{where}"
             op = f", operator at {e['operator_lat']:.5f},{e['operator_lon']:.5f}" if e.get("operator_lat") else ""
             self.eng.status("drone", "alert", base + op, "ble")  # live only
             safe = {k: v for k, v in s["extra"].items() if not k.startswith("operator")}

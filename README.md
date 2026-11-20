@@ -66,7 +66,11 @@ Optional RF module: `sudo apt install rtl-sdr` + an RTL-SDR dongle (24 MHz-1.7 G
 - **This is not a guarantee of safety.** A quiet dashboard means "nothing seen by these radios", not "nothing is there".
   Blind spots: drones without Remote ID, SD-card-only cameras, cellular/GPS trackers, anything on 2.4/5.8 GHz video.
 - **Remote ID is unauthenticated.** Anyone can broadcast a fake one, so a red drone alert means a broadcast *claims* a
-  drone. Position and operator location are whatever the sender says. Operator coordinates are shown live and are
+  drone. Position and operator location are whatever the sender says. With `pip install "n0rma-sec[trust]"` each alert
+  also carries a verdict on the transmitter from the `remoteid` package: `SPOOFED`, `suspicious`, `plausible` or
+  `signature verified`, with the reasons (a position that jumps further than an aircraft flies, counter reuse, two radios
+  claiming one identity, a public spoofing tool's fingerprint). `plausible` means nothing contradicts the broadcast yet,
+  not that it is true. Operator coordinates are shown live and are
   **never written to disk**; events are pruned after 30 days.
 - **Do not interfere with a drone** (shooting at, jamming or spoofing one is a federal crime). Report it to law
   enforcement or the FAA.
