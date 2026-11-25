@@ -1,12 +1,40 @@
 <p align="center"><img src="docs/images/n0rma-banner.png" alt="N0rma" width="100%"></p>
 
-# N0RMA
+# N0RMA: counter-surveillance you can verify
 
-
-Home counter-surveillance **detector** for **Linux** (BlueZ + NetworkManager + `iw`). Detect-only: no jamming, no spoofing.
-Run: `./n0rma.sh setup` once, then `./n0rma.sh run` -> http://127.0.0.1:8777
+**Find out whether someone is tracking or watching you, in plain words, and keep a record that can be checked.** N0RMA listens for Bluetooth trackers (AirTag and other Find My accessories, Tile, Samsung SmartTag, Chipolo), Remote ID drones, camera-like and unknown Wi-Fi and network devices, Bluetooth pairing pop-up floods and known attack tools, and, with an RTL-SDR dongle, radio signals. It explains every alert and how sure it is, and it writes a tamper-evident report that anyone can verify. Detect-only: no jamming, no spoofing. Runs on **Linux** and sends nothing off your computer.
 
 ![dashboard with made-up demo data](https://raw.githubusercontent.com/sloppytopp/n0rma/main/docs/screenshot.png)
+
+_Demo data, not a real site._
+
+## Why you can trust it
+- **It tells you how sure it is.** Every flagged item says what was seen, in words, and what it cannot tell you. It never says a place is "clear".
+- **Its record can be checked by someone else.** `n0rma evidence -o report.txt` hash-chains every line to the one before it. Send the final hash to yourself, then `n0rma evidence --verify report.txt` on any machine. Change one character and verification fails. Try it.
+- **It is honest about its blind spots:** cellular and GPS trackers, SD-card-only cameras, drones without Remote ID, 2.4 and 5.8 GHz video. See [Read this first](#read-this-first).
+- **Built on real standards:** Bluetooth LE advertisement parsing, FAA/ASTM Remote ID, RTL-SDR with real captures (see below), and a report format the [Android app](https://github.com/sloppytopp/n0rma-android) also reads and writes.
+- **Private by design:** local dashboard, no accounts, no cloud. MIT licence.
+
+## Quick start
+```bash
+sudo apt install ieee-data nmap iw network-manager bluez
+pip install n0rma-sec          # installs the `n0rma` command
+n0rma setup                    # once: your Wi-Fi, which devices are yours
+n0rma run                      # then open http://127.0.0.1:8777
+```
+Full install notes, commands and limits are below.
+
+## N0RMA Pro: for investigators, TSCM teams and advocacy groups
+The free edition stays free for every detection feature. **N0RMA Pro** is built for people who do sweeps for clients and need to hand over documents that hold up:
+- **PDF reports** with the verified text report sealed inside, **trusted timestamps** (RFC 3161), and **sealed multi-case bundles**
+- A **Radio workspace**: live spectrum and waterfall, listening, bookmarks, signal identification, and a whole-spectrum scan that lists what it found by band
+- **Slack alerts** with a retrying queue, and CSV/JSON export
+- A Bluetooth **tracker presence log** (first heard, last heard, gaps) and a signal trend
+
+**Status: early access for working professionals.** We say up front that Pro's tracker detection is still being verified against real planted trackers, and we would rather you test it than take our word. Interested? [CONTACT: Issues link, form or email goes here].
+
+<details>
+<summary><b>What's new (changelog)</b></summary>
 
 ## New since 0.5 (on `main`, not yet released)
 - **Radar tab:** separate Bluetooth and Wi-Fi scopes (distance only - the angle of a dot means nothing, because signal strength gives no direction) with plain-language result cards: Find it / This is mine / Details.
@@ -35,6 +63,8 @@ Run: `./n0rma.sh setup` once, then `./n0rma.sh run` -> http://127.0.0.1:8777
 - A plain-language banner ("All clear" / "Keeping an eye on something" / "Needs your attention") with a breathing dot and live scan ages, so you can see it is working
 - **"This is mine"** on trackers: your own Tile/AirTag stops flagging and shows as yours
 - Sister project: [n0rma-android](https://github.com/sloppytopp/n0rma-android) (public, with signed APKs on its Releases page) - same detection on a phone, with tap-to-find, room sweeps and survey exports
+
+</details>
 
 ## Install
 `pip install n0rma-sec` (the command it installs is `n0rma`) (or from source below). System packages are still needed:
