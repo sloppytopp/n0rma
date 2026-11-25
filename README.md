@@ -31,7 +31,7 @@ The free edition stays free for every detection feature. **N0RMA Pro** is built 
 - **Slack alerts** with a retrying queue, and CSV/JSON export
 - A Bluetooth **tracker presence log** (first heard, last heard, gaps) and a signal trend
 
-**Status: early access for working professionals.** We say up front that Pro's tracker detection is still being verified against real planted trackers, and we would rather you test it than take our word. Interested? [CONTACT: Issues link, form or email goes here].
+**Status: early access for working professionals.** We say up front that Pro's tracker detection is still being verified against real planted trackers, and we would rather you test it than take our word. Interested? [Open an issue titled "N0RMA Pro early access"](https://github.com/sloppytopp/n0rma/issues/new?title=N0RMA+Pro+early+access) saying what you do and that you have a Linux machine (Pro runs on Linux). Please keep private details out of the public issue; ask for a private reply and we will arrange one.
 
 <details>
 <summary><b>What's new (changelog)</b></summary>
